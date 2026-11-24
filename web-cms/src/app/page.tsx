@@ -40,6 +40,8 @@ import { List, ListItem } from '@astryxdesign/core/List';
 import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
 import { ProgressBar } from '@astryxdesign/core/ProgressBar';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
+import { Center } from '@astryxdesign/core/Center';
+import { Avatar } from '@astryxdesign/core/Avatar';
 
 import { themes, defaultThemeSlug } from '@/astryx-themes';
 import { ThreeCanvasViewer } from '@/components/three/ThreeCanvasViewer';
@@ -55,9 +57,11 @@ import { ENV } from '@/config/env';
 import { PRODUCT_COLOR_PRESETS } from '@/config/theme';
 import { useI18n } from '@/i18n/I18nContext';
 import {
+  type CmsAuthUser,
   FALLBACK_CATEGORIES,
   FALLBACK_MATERIALS,
   FALLBACK_PRODUCTS,
+  clearCmsSession,
   createCategoryAdmin,
   createMaterialAdmin,
   createProductAdmin,
@@ -70,6 +74,8 @@ import {
   getCustomMaterials,
   getMediaStatus,
   getProducts,
+  getStoredCmsSession,
+  loginCmsAdmin,
   updateCategoryAdmin,
   updateMaterialAdmin,
   updateOrderPaymentStatus,
@@ -352,6 +358,13 @@ export default function AdminCmsPage() {
   const [hoveredMonth, setHoveredMonth] = useState<string | null>('T11');
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
+  // CMS Authentication State
+  const [currentUser, setCurrentUser] = useState<CmsAuthUser | null>(null);
+  const [loginEmail, setLoginEmail] = useState(ENV.DEFAULT_ADMIN_EMAIL);
+  const [loginPassword, setLoginPassword] = useState(ENV.DEFAULT_ADMIN_PASSWORD);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
   // Data States
   const [orders, setOrders] = useState<Order[]>([DEMO_CRAFTING_ORDER]);
   const [categories, setCategories] = useState<CategoryItem[]>(FALLBACK_CATEGORIES);
@@ -437,9 +450,7 @@ export default function AdminCmsPage() {
     setTimeout(() => setToastMsg(null), 3500);
   };
 
-  useEffect(() => {
-    setIsHydrated(true);
-    let mounted = true;
+  const loadCmsData = () => {
     Promise.all([
       getAdminDashboard(),
       getAdminOrders(),
@@ -448,7 +459,6 @@ export default function AdminCmsPage() {
       getCustomMaterials(),
       getMediaStatus(),
     ]).then(([, serverOrders, catList, prodList, matList, cloudStatus]) => {
-      if (!mounted) return;
       if (serverOrders && serverOrders.length > 0) {
         setOrders(serverOrders);
         setInspectedOrder(serverOrders[0]);
@@ -458,10 +468,57 @@ export default function AdminCmsPage() {
       if (matList.length > 0) setMaterials(matList);
       if (cloudStatus) setMediaStatus(cloudStatus);
     });
-    return () => {
-      mounted = false;
-    };
+  };
+
+  useEffect(() => {
+    setIsHydrated(true);
+    const { token, user } = getStoredCmsSession();
+    if (token && user) {
+      setCurrentUser(user);
+      loadCmsData();
+    }
   }, []);
+
+  const handleLoginSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setLoginError(null);
+    if (!loginEmail.trim() || !loginPassword.trim()) {
+      setLoginError(
+        isEn
+          ? 'Please enter both your email and password.'
+          : 'Vui lòng nhập đầy đủ Email và Mật khẩu quản trị.'
+      );
+      return;
+    }
+
+    setIsLoggingIn(true);
+    try {
+      const { user } = await loginCmsAdmin(loginEmail, loginPassword);
+      setCurrentUser(user);
+      loadCmsData();
+      notify(
+        isEn
+          ? `Welcome back, ${user.fullName}!`
+          : `Xin chào ${user.fullName} (${user.role.toUpperCase()})!`
+      );
+    } catch (err) {
+      setLoginError(
+        err instanceof Error
+          ? err.message
+          : isEn
+          ? 'Authentication failed. Please verify your credentials.'
+          : 'Đăng nhập thất bại. Vui lòng kiểm tra lại tài khoản.'
+      );
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleLogout = () => {
+    clearCmsSession();
+    setCurrentUser(null);
+    setLoginError(null);
+  };
 
   // Controlled collapse config shared between TopNav toggle button and SideNav
   const sideNavCollapseConfig = useMemo(
@@ -1399,6 +1456,169 @@ export default function AdminCmsPage() {
     return null;
   }
 
+  // =========================================================================
+  // ASTRYX NEUTRAL LOGIN SCREEN (When Admin / Artisan is not signed in)
+  // =========================================================================
+  if (!currentUser) {
+    return (
+      <Theme theme={themes[defaultThemeSlug]} mode={themeMode}>
+        <div
+          style={{
+            minHeight: '100dvh',
+            display: 'flex',
+            flexDirection: 'column',
+            backgroundColor: 'var(--color-background-body)',
+          }}
+        >
+          {/* Minimal Top Bar for Language & Theme Switching */}
+          <HStack gap={2} vAlign="center" hAlign="between" padding={4}>
+            <HStack gap={2} vAlign="center">
+              <StatusDot variant="accent" isPulsing label="WAVO CMS" />
+              <Text weight="semibold">WAVO × ECO GREEN CMS</Text>
+            </HStack>
+
+            <HStack gap={2} vAlign="center">
+              <SegmentedControl
+                size="sm"
+                label={isEn ? 'Language' : 'Ngôn ngữ'}
+                value={locale}
+                onChange={(val) => setLocale(val as 'vi' | 'en')}
+              >
+                <SegmentedControlItem value="vi" label="VI" />
+                <SegmentedControlItem value="en" label="EN" />
+              </SegmentedControl>
+
+              <SegmentedControl
+                size="sm"
+                label={isEn ? 'Theme Mode' : 'Giao diện'}
+                value={themeMode}
+                onChange={(val) => setThemeMode(val as 'light' | 'dark')}
+              >
+                <SegmentedControlItem value="light" label={isEn ? 'Light' : 'Sáng'} />
+                <SegmentedControlItem value="dark" label={isEn ? 'Dark' : 'Tối'} />
+              </SegmentedControl>
+            </HStack>
+          </HStack>
+
+          <Center axis="both" padding={6} style={{ flex: 1 }}>
+            <div
+              className="cms-anim-enter"
+              style={{ width: '100%', maxWidth: 440 }}
+            >
+              <VStack gap={5}>
+                <VStack gap={1} hAlign="center">
+                  <Badge variant="neutral" label="Astryx Neutral Admin Portal" />
+                  <Heading level={1}>
+                    {isEn ? 'Sign in to NetLoop CMS' : 'Đăng Nhập Quản Trị Xưởng 3D'}
+                  </Heading>
+                  <Text type="supporting">
+                    {isEn
+                      ? 'Enter your Admin or Artisan credentials to manage orders, 3D tickets, and Cloudinary catalog.'
+                      : 'Đăng nhập tài khoản Quản trị viên hoặc Nghệ nhân để quản lý đơn hàng, phiếu 3D & kho Cloudinary.'}
+                  </Text>
+                </VStack>
+
+                <Card padding={6} width="100%">
+                  <form onSubmit={handleLoginSubmit}>
+                    <VStack gap={4}>
+                      {loginError && (
+                        <Banner
+                          status="error"
+                          container="card"
+                          collapsible={false}
+                          title={isEn ? 'Sign in failed' : 'Đăng nhập không thành công'}
+                          description={loginError}
+                        />
+                      )}
+
+                      <FormLayout>
+                        <TextInput
+                          label="Email"
+                          type="email"
+                          size="lg"
+                          isRequired
+                          value={loginEmail}
+                          onChange={setLoginEmail}
+                          placeholder="admin@dtu-upcycled.vn"
+                          autoComplete="email"
+                          hasClear
+                          width="100%"
+                        />
+
+                        <TextInput
+                          label={isEn ? 'Password' : 'Mật khẩu'}
+                          type="password"
+                          size="lg"
+                          isRequired
+                          value={loginPassword}
+                          onChange={setLoginPassword}
+                          placeholder="••••••••••••"
+                          autoComplete="current-password"
+                          width="100%"
+                        />
+                      </FormLayout>
+
+                      <Button
+                        type="submit"
+                        label={
+                          isLoggingIn
+                            ? isEn
+                              ? 'Signing in...'
+                              : 'Đang xác thực...'
+                            : isEn
+                            ? 'Sign in to CMS'
+                            : 'Đăng nhập Hệ thống CMS'
+                        }
+                        variant="primary"
+                        size="lg"
+                        width="100%"
+                        isLoading={isLoggingIn}
+                        onClick={() => handleLoginSubmit()}
+                      />
+
+                      <Divider />
+
+                      {/* Quick Demo Role Switcher */}
+                      <VStack gap={2}>
+                        <Text type="supporting">
+                          {isEn
+                            ? 'Quick fill demo credentials:'
+                            : 'Chọn nhanh tài khoản mẫu để kiểm thử phân quyền (RBAC):'}
+                        </Text>
+                        <HStack gap={2} wrap="wrap">
+                          <Button
+                            label="Admin (Toàn quyền)"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => {
+                              setLoginEmail(ENV.DEFAULT_ADMIN_EMAIL);
+                              setLoginPassword(ENV.DEFAULT_ADMIN_PASSWORD);
+                              setLoginError(null);
+                            }}
+                          />
+                          <Button
+                            label="Artisan / Staff (Xưởng 3D)"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => {
+                              setLoginEmail('artisan@dtu-upcycled.vn');
+                              setLoginPassword(ENV.DEFAULT_ADMIN_PASSWORD);
+                              setLoginError(null);
+                            }}
+                          />
+                        </HStack>
+                      </VStack>
+                    </VStack>
+                  </form>
+                </Card>
+              </VStack>
+            </div>
+          </Center>
+        </div>
+      </Theme>
+    );
+  }
+
   return (
     <Theme theme={themes[defaultThemeSlug]} mode={themeMode}>
       <AppShell
@@ -1468,6 +1688,20 @@ export default function AdminCmsPage() {
                   target="_blank"
                   rel="noopener noreferrer"
                 />
+
+                <HStack gap={1.5} vAlign="center">
+                  <Avatar name={currentUser.fullName} size="sm" />
+                  <Badge
+                    variant={currentUser.role === 'admin' ? 'blue' : 'teal'}
+                    label={currentUser.role.toUpperCase()}
+                  />
+                  <Button
+                    label={isEn ? 'Sign out' : 'Đăng xuất'}
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleLogout}
+                  />
+                </HStack>
               </HStack>
             }
           />

@@ -557,32 +557,119 @@ export const FALLBACK_MATERIALS: CustomMaterial[] = [
 ];
 
 // ============================================================================
-// GENERIC HTTP FETCH HELPER & AUTOMATIC ADMIN TOKEN HANDLER
+// GENERIC HTTP FETCH HELPER & CMS AUTHENTICATION HANDLER
 // ============================================================================
+
+export const CMS_TOKEN_STORAGE_KEY = 'wavo_cms_auth_token_v1';
+export const CMS_USER_STORAGE_KEY = 'wavo_cms_auth_user_v1';
+
+export interface CmsAuthUser {
+  _id: string;
+  fullName: string;
+  email: string;
+  role: 'admin' | 'staff' | 'customer';
+  phone?: string;
+}
 
 let cachedAdminToken: string | null = null;
 
-async function getAdminAuthHeaders(): Promise<Record<string, string>> {
-  if (cachedAdminToken) {
-    return { Authorization: `Bearer ${cachedAdminToken}` };
+export function getStoredCmsSession(): { token: string | null; user: CmsAuthUser | null } {
+  if (typeof window === 'undefined') {
+    return { token: cachedAdminToken, user: null };
   }
+  try {
+    const token = localStorage.getItem(CMS_TOKEN_STORAGE_KEY);
+    const rawUser = localStorage.getItem(CMS_USER_STORAGE_KEY);
+    const user = rawUser ? (JSON.parse(rawUser) as CmsAuthUser) : null;
+    if (token) cachedAdminToken = token;
+    return { token, user };
+  } catch {
+    return { token: cachedAdminToken, user: null };
+  }
+}
+
+export function clearCmsSession(): void {
+  cachedAdminToken = null;
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.removeItem(CMS_TOKEN_STORAGE_KEY);
+      localStorage.removeItem(CMS_USER_STORAGE_KEY);
+    } catch {
+      // Ignore storage error
+    }
+  }
+}
+
+export async function loginCmsAdmin(
+  email: string,
+  password: string
+): Promise<{ token: string; user: CmsAuthUser }> {
+  const cleanEmail = email.trim().toLowerCase();
   try {
     const res = await fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: ENV.DEFAULT_ADMIN_EMAIL,
-        password: ENV.DEFAULT_ADMIN_PASSWORD,
-      }),
+      body: JSON.stringify({ email: cleanEmail, password }),
     });
-    const json = await res.json();
-    const token = json?.data?.token || json?.token;
-    if (token) {
-      cachedAdminToken = token;
-      return { Authorization: `Bearer ${token}` };
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(json?.message || 'Email hoặc mật khẩu không chính xác.');
     }
-  } catch {
-    // Ignore if backend is offline
+
+    const token: string = json?.data?.token || json?.token;
+    const user: CmsAuthUser = json?.data?.user || json?.user;
+    if (!token || !user) {
+      throw new Error('Phản hồi đăng nhập từ máy chủ không hợp lệ.');
+    }
+    if (!['admin', 'staff'].includes(user.role)) {
+      throw new Error('Tài khoản này không có quyền truy cập hệ thống Quản trị CMS (yêu cầu quyền Admin hoặc Nghệ nhân/Staff).');
+    }
+
+    cachedAdminToken = token;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(CMS_TOKEN_STORAGE_KEY, token);
+      localStorage.setItem(CMS_USER_STORAGE_KEY, JSON.stringify(user));
+    }
+    return { token, user };
+  } catch (err) {
+    // Allow offline demo fallback if backend is unreachable AND credentials match configured default admin/staff
+    const isNetworkError =
+      err instanceof TypeError ||
+      (err instanceof Error && /fetch|network|failed to fetch/i.test(err.message));
+
+    if (
+      isNetworkError &&
+      (cleanEmail === ENV.DEFAULT_ADMIN_EMAIL.toLowerCase() ||
+        cleanEmail === 'artisan@dtu-upcycled.vn') &&
+      password === ENV.DEFAULT_ADMIN_PASSWORD
+    ) {
+      const demoUser: CmsAuthUser = {
+        _id: cleanEmail.startsWith('admin') ? 'usr-admin-demo' : 'usr-staff-demo',
+        fullName: cleanEmail.startsWith('admin')
+          ? 'Quản Trị Viên WAVO'
+          : 'Nghệ Nhân Nguyễn Thị Lành',
+        email: cleanEmail,
+        role: cleanEmail.startsWith('admin') ? 'admin' : 'staff',
+      };
+      const demoToken = 'demo-offline-jwt-token';
+      cachedAdminToken = demoToken;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(CMS_TOKEN_STORAGE_KEY, demoToken);
+        localStorage.setItem(CMS_USER_STORAGE_KEY, JSON.stringify(demoUser));
+      }
+      return { token: demoToken, user: demoUser };
+    }
+    throw err;
+  }
+}
+
+async function getAdminAuthHeaders(): Promise<Record<string, string>> {
+  const { token } = getStoredCmsSession();
+  if (token) {
+    return { Authorization: `Bearer ${token}` };
+  }
+  if (cachedAdminToken) {
+    return { Authorization: `Bearer ${cachedAdminToken}` };
   }
   return {};
 }
