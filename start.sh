@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 
 # ==============================================================================
-# DTU Upcycled Fishing Net & 3D Ocean Craft Ecosystem — Quick Start Script
-# Hệ sinh thái 2 Web Độc lập + Backend API:
-#   - Backend API Server           : http://localhost:5000  (backend/)
-#   - Web Store & 3D Studio (Wavo) : http://localhost:3000  (frontend_v2/ | web-store/)
-#   - Web CMS & 3D Inspector       : http://localhost:3002  (web-cms/)
+# WAVO × ECO GREEN — Quick Start Script
+#   - Backend API  : http://localhost:5000
+#   - Web Store    : http://localhost:3000
+#   - Web CMS      : http://localhost:3002
 # ==============================================================================
 
 set -e
@@ -27,6 +26,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
 BOLD='\033[1m'
+DIM='\033[2m'
 NC='\033[0m'
 
 BACKEND_PID=""
@@ -35,37 +35,30 @@ CMS_PID=""
 
 cleanup() {
   echo ""
-  echo -e "${YELLOW}⚡ Đang dừng toàn bộ 3 dịch vụ (Backend, Web Store, Web CMS)...${NC}"
+  echo -e "${YELLOW}⚡ Đang tắt hệ thống...${NC}"
   for pid in "${BACKEND_PID}" "${STORE_PID}" "${CMS_PID}"; do
     if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
       kill "${pid}" 2>/dev/null || true
     fi
   done
-  echo -e "${GREEN}✔ Đã tắt toàn bộ dịch vụ an toàn.${NC}"
+  echo -e "${GREEN}✔ Đã dừng toàn bộ dịch vụ.${NC}"
 }
 
 print_banner() {
-  echo -e "${TEAL}================================================================================${NC}"
-  echo -e "${BOLD}🌊 DTU UPCYCLED FISHING NET & 3D OCEAN CRAFT ECOSYSTEM${NC}"
-  echo -e "   Kiến trúc 2 Web Độc Lập (Web Store:${STORE_PORT} • Web CMS:${CMS_PORT}) + Backend API:${BACKEND_PORT}"
-  echo -e "${TEAL}================================================================================${NC}"
+  echo ""
+  echo -e "${TEAL}${BOLD}🌊 WAVO × ECO GREEN${NC} ${DIM}(Store :${STORE_PORT} • CMS :${CMS_PORT} • API :${BACKEND_PORT})${NC}"
+  echo -e "${DIM}────────────────────────────────────────────────────────────${NC}"
 }
 
 check_prerequisites() {
-  if ! command -v node >/dev/null 2>&1; then
-    echo -e "${RED}✖ Không tìm thấy Node.js. Vui lòng cài đặt Node.js >= 18.${NC}"
+  if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+    echo -e "${RED}✖ Vui lòng cài đặt Node.js (>= 18) và npm.${NC}"
     exit 1
   fi
-  if ! command -v npm >/dev/null 2>&1; then
-    echo -e "${RED}✖ Không tìm thấy npm. Vui lòng cài đặt npm.${NC}"
-    exit 1
-  fi
-  echo -e "${GREEN}✔ Node.js:${NC} $(node -v) | ${GREEN}npm:${NC} $(npm -v)"
 }
 
 ensure_env_files() {
   if [[ ! -f "${BACKEND_DIR}/.env" ]]; then
-    echo -e "${CYAN}⚙ Đang khởi tạo file cấu hình mặc định ${BACKEND_DIR}/.env...${NC}"
     cat <<EOF > "${BACKEND_DIR}/.env"
 PORT=${BACKEND_PORT}
 NODE_ENV=development
@@ -88,27 +81,20 @@ EOF
   fi
 
   if [[ -d "${FRONTEND_V2_DIR}" ]] && [[ ! -f "${FRONTEND_V2_DIR}/.env.local" ]]; then
-    cat <<EOF > "${FRONTEND_V2_DIR}/.env.local"
-VITE_API_BASE_URL=http://localhost:${BACKEND_PORT}/api
-EOF
+    echo "VITE_API_BASE_URL=http://localhost:${BACKEND_PORT}/api" > "${FRONTEND_V2_DIR}/.env.local"
   fi
 
-  local cms_env_content
-  cms_env_content=$(cat <<EOF
+  if [[ -d "${WEB_CMS_DIR}" ]] && [[ ! -f "${WEB_CMS_DIR}/.env.local" ]]; then
+    cat <<EOF > "${WEB_CMS_DIR}/.env.local"
 NEXT_PUBLIC_API_URL=http://localhost:${BACKEND_PORT}/api
 NEXT_PUBLIC_STORE_URL=http://localhost:${STORE_PORT}
 NEXT_PUBLIC_CMS_URL=http://localhost:${CMS_PORT}
 NEXT_PUBLIC_S3_BASE_URL=https://dtu-img-db-868017909899-ap-southeast-2-an.s3.ap-southeast-2.amazonaws.com
 EOF
-)
-
-  if [[ -d "${WEB_CMS_DIR}" ]] && [[ ! -f "${WEB_CMS_DIR}/.env.local" ]]; then
-    echo "${cms_env_content}" > "${WEB_CMS_DIR}/.env.local"
   fi
 }
 
 ensure_symlinks() {
-  # Đảm bảo symlink web-store -> frontend_v2
   if [[ -L "${WEB_STORE_DIR}" ]] || [[ ! -e "${WEB_STORE_DIR}" ]]; then
     rm -f "${WEB_STORE_DIR}"
     ln -s "frontend_v2" "${WEB_STORE_DIR}"
@@ -119,18 +105,14 @@ ensure_dependencies() {
   local force_install="${1:-false}"
 
   if [[ "${force_install}" == "true" ]] || [[ ! -d "${BACKEND_DIR}/node_modules" ]]; then
-    echo -e "${CYAN}📦 Đang cài đặt dependencies cho Backend (${BACKEND_DIR})...${NC}"
-    (cd "${BACKEND_DIR}" && npm install)
-  else
-    echo -e "${GREEN}✔ Backend node_modules đã sẵn sàng.${NC}"
+    echo -e "${CYAN}📦 Đang cài đặt Backend...${NC}"
+    (cd "${BACKEND_DIR}" && npm install --silent)
   fi
 
   if [[ -d "${FRONTEND_V2_DIR}" ]]; then
     if [[ "${force_install}" == "true" ]] || [[ ! -d "${FRONTEND_V2_DIR}/node_modules" ]]; then
-      echo -e "${CYAN}📦 Đang cài đặt dependencies cho Web Store (${FRONTEND_V2_DIR})...${NC}"
-      (cd "${FRONTEND_V2_DIR}" && npm install)
-    else
-      echo -e "${GREEN}✔ Web Store (frontend_v2) node_modules đã sẵn sàng.${NC}"
+      echo -e "${CYAN}📦 Đang cài đặt Web Store...${NC}"
+      (cd "${FRONTEND_V2_DIR}" && npm install --silent)
     fi
   fi
 
@@ -139,10 +121,8 @@ ensure_dependencies() {
       rm -f "${WEB_CMS_DIR}/node_modules"
     fi
     if [[ "${force_install}" == "true" ]] || [[ ! -d "${WEB_CMS_DIR}/node_modules" ]]; then
-      echo -e "${CYAN}📦 Đang cài đặt dependencies cho Web CMS (${WEB_CMS_DIR})...${NC}"
-      (cd "${WEB_CMS_DIR}" && npm install)
-    else
-      echo -e "${GREEN}✔ Web CMS node_modules đã sẵn sàng.${NC}"
+      echo -e "${CYAN}📦 Đang cài đặt Web CMS...${NC}"
+      (cd "${WEB_CMS_DIR}" && npm install --silent)
     fi
   fi
 
@@ -159,9 +139,8 @@ free_port_if_busy() {
         local comm
         comm=$(ps -p "${pid}" -o comm= 2>/dev/null || true)
         if echo "${comm}" | grep -qi "node"; then
-          echo -e "${YELLOW}⚠ Cổng ${port} đang bận bởi tiến trình node cũ (PID: ${pid}). Đang giải phóng cổng...${NC}"
           kill -9 "${pid}" 2>/dev/null || true
-          sleep 0.5
+          sleep 0.3
         fi
       done
     fi
@@ -170,50 +149,29 @@ free_port_if_busy() {
 
 print_usage() {
   cat <<EOF
-Cách sử dụng: ./start.sh [TÙY CHỌN]
+Cách dùng: ./start.sh [TÙY CHỌN]
 
-Các tùy chọn:
-  (không tham số)   Khởi chạy đồng thời cả 3 dịch vụ:
-                      1. Backend API Server           (http://localhost:${BACKEND_PORT})
-                      2. Web Store & 3D Studio        (http://localhost:${STORE_PORT})
-                      3. Web CMS & 3D Inspector       (http://localhost:${CMS_PORT})
-  --seed            Nạp mới lại toàn bộ dữ liệu mẫu (8 sản phẩm gốc, 12 nguyên liệu vỏ sò/ốc, đơn mẫu 3D)
-  --test            Chạy bộ kiểm thử tự động Backend API (Gherkin) và kiểm tra build cả 2 ứng dụng Web
-  --install         Buộc cài đặt lại node_modules cho toàn bộ hệ thống
-  --help, -h        Hiển thị hướng dẫn sử dụng này
+  (mặc định)   Khởi chạy toàn bộ hệ thống (Store, CMS, API)
+  --seed       Nạp lại dữ liệu mẫu vào MongoDB
+  --test       Chạy kiểm thử Backend và kiểm tra build Web Store + Web CMS
+  --install    Cài đặt lại toàn bộ dependencies
+  --help, -h   Hiển thị hướng dẫn
 EOF
 }
 
 print_access_guide() {
+  echo -e "${GREEN}${BOLD}✔ Hệ thống đã sẵn sàng!${NC}"
   echo ""
-  echo -e "${TEAL}================================================================================${NC}"
-  echo -e "${GREEN}${BOLD}🚀 HỆ THỐNG WEB STORE, WEB CMS & BACKEND API ĐÃ KHỞI CHẠY THÀNH CÔNG!${NC}"
-  echo -e "${TEAL}--------------------------------------------------------------------------------${NC}"
-  echo -e "${BOLD}📌 1. Hai Ứng Dụng Web Độc Lập:${NC}"
-  echo -e "   • ${CYAN}[Port ${STORE_PORT}] Web Store & 3D Customizer Studio:${NC} http://localhost:${STORE_PORT}"
-  echo -e "     ├─ Cửa hàng sản phẩm tái chế : http://localhost:${STORE_PORT}/shop"
-  echo -e "     ├─ Phòng 3D Studio           : http://localhost:${STORE_PORT}/design"
-  echo -e "     └─ Tra cứu tiến độ đơn hàng  : http://localhost:${STORE_PORT}/order-lookup"
-  echo -e "   • ${CYAN}[Port ${CMS_PORT}] Web CMS & Xưởng Chế Tác 3D:${NC}      http://localhost:${CMS_PORT}"
+  echo -e "  🛒 ${BOLD}Web Store:${NC}   ${CYAN}http://localhost:${STORE_PORT}${NC}"
+  echo -e "  🛠  ${BOLD}Web CMS:${NC}     ${CYAN}http://localhost:${CMS_PORT}${NC}"
+  echo -e "  ⚙️  ${BOLD}Backend API:${NC} ${CYAN}http://localhost:${BACKEND_PORT}/api${NC}"
   echo ""
-  echo -e "${BOLD}📌 2. Đường dẫn Server API (Backend Node.js + Express + MongoDB):${NC}"
-  echo -e "   • ${CYAN}[Port ${BACKEND_PORT}] API Base URL:${NC}                 http://localhost:${BACKEND_PORT}/api"
-  echo -e "   • ${CYAN}[Port ${BACKEND_PORT}] API Health Check:${NC}             http://localhost:${BACKEND_PORT}/api/health"
-  echo ""
-  echo -e "${BOLD}📌 3. Tài khoản & Mã đơn hàng mẫu (Đã nạp sẵn):${NC}"
-  echo -e "   • ${YELLOW}Admin CMS:${NC}      admin@dtu-upcycled.vn    | Mật khẩu: ${BOLD}Password123!${NC}"
-  echo -e "   • ${YELLOW}Artisan/Staff:${NC}  artisan@dtu-upcycled.vn  | Mật khẩu: ${BOLD}Password123!${NC}"
-  echo -e "   • ${YELLOW}Customer:${NC}       customer@dtu-upcycled.vn | Mật khẩu: ${BOLD}Password123!${NC}"
-  echo -e "   • ${YELLOW}Mã đơn mẫu 1:${NC}   DTU-20261108-OCN1 (SĐT: 0905888999 — Đang chế tác 3D)"
-  echo -e "   • ${YELLOW}Mã đơn mẫu 2:${NC}   DTU-20261108-OCN2 (SĐT: 0912345678 — Chờ xác nhận)"
-  echo -e "${TEAL}================================================================================${NC}"
-  echo -e "${YELLOW}💡 Nhấn Ctrl+C để dừng đồng thời cả 3 dịch vụ.${NC}"
+  echo -e "  🔑 ${DIM}Admin: admin@dtu-upcycled.vn / Password123!${NC}"
+  echo -e "${DIM}────────────────────────────────────────────────────────────${NC}"
+  echo -e "${YELLOW}💡 Nhấn Ctrl+C để dừng hệ thống.${NC}"
   echo ""
 }
 
-# ==============================================================================
-# Main Execution Flow
-# ==============================================================================
 MODE="${1:-run}"
 
 case "${MODE}" in
@@ -227,7 +185,7 @@ case "${MODE}" in
     check_prerequisites
     ensure_env_files
     ensure_dependencies "true"
-    echo -e "${GREEN}✔ Đã cài đặt hoàn tất toàn bộ dependencies!${NC}"
+    echo -e "${GREEN}✔ Đã cài đặt xong toàn bộ dependencies.${NC}"
     exit 0
     ;;
   --seed)
@@ -235,9 +193,9 @@ case "${MODE}" in
     check_prerequisites
     ensure_env_files
     ensure_dependencies "false"
-    echo -e "${CYAN}🌱 Đang nạp lại dữ liệu mẫu vào MongoDB...${NC}"
+    echo -e "${CYAN}🌱 Đang nạp dữ liệu mẫu...${NC}"
     (cd "${BACKEND_DIR}" && npm run seed)
-    echo -e "${GREEN}✔ Hoàn tất nạp dữ liệu mẫu!${NC}"
+    echo -e "${GREEN}✔ Hoàn tất!${NC}"
     exit 0
     ;;
   --test)
@@ -245,17 +203,17 @@ case "${MODE}" in
     check_prerequisites
     ensure_env_files
     ensure_dependencies "false"
-    echo -e "${CYAN}🧪 1/3: Chạy bộ kiểm thử tự động Backend API & Business Rules...${NC}"
+    echo -e "${CYAN}🧪 [1/3] Kiểm thử Backend API...${NC}"
     (cd "${BACKEND_DIR}" && npm test && npm run seed)
     if [[ -d "${FRONTEND_V2_DIR}" ]]; then
-      echo -e "${CYAN}🏗 2/3: Kiểm tra Production Build của Web Store (${FRONTEND_V2_DIR})...${NC}"
+      echo -e "${CYAN}🏗  [2/3] Build Web Store...${NC}"
       (cd "${FRONTEND_V2_DIR}" && npm run build)
     fi
     if [[ -d "${WEB_CMS_DIR}" ]]; then
-      echo -e "${CYAN}🏗 3/3: Kiểm tra Production Build của Web CMS (${WEB_CMS_DIR})...${NC}"
+      echo -e "${CYAN}🏗  [3/3] Build Web CMS...${NC}"
       (cd "${WEB_CMS_DIR}" && npm run build)
     fi
-    echo -e "${GREEN}✔ Toàn bộ kiểm thử Backend và bản build của Web Store + Web CMS đều PASS 100%!${NC}"
+    echo -e "${GREEN}✔ Toàn bộ bài test và bản build đều PASS!${NC}"
     exit 0
     ;;
   run|"")
@@ -270,32 +228,32 @@ case "${MODE}" in
     free_port_if_busy "${STORE_PORT}"
     free_port_if_busy "${CMS_PORT}"
 
-    echo -e "${CYAN}🚀 [1/3] Đang khởi động Backend API Server tại cổng ${BACKEND_PORT}...${NC}"
-    (cd "${BACKEND_DIR}" && PORT="${BACKEND_PORT}" npm start) &
+    echo -e "${DIM}⏳ Đang khởi động dịch vụ...${NC}"
+
+    mkdir -p "${ROOT_DIR}/.logs"
+
+    (cd "${BACKEND_DIR}" && PORT="${BACKEND_PORT}" npm start > "${ROOT_DIR}/.logs/backend.log" 2>&1) &
     BACKEND_PID=$!
 
-    # Đợi Backend sẵn sàng
-    for i in {1..20}; do
-      if curl -s "http://localhost:${BACKEND_PORT}/api/health" >/dev/null 2>&1; then
-        echo -e "${GREEN}✔ Backend API Server đã sẵn sàng tại http://localhost:${BACKEND_PORT}${NC}"
-        break
-      fi
-      sleep 1
-    done
-
     if [[ -d "${FRONTEND_V2_DIR}" ]]; then
-      echo -e "${CYAN}🚀 [2/3] Đang khởi động Web Store & 3D Studio tại cổng ${STORE_PORT}...${NC}"
-      (cd "${FRONTEND_V2_DIR}" && npx vite --port "${STORE_PORT}" --host 0.0.0.0) &
+      (cd "${FRONTEND_V2_DIR}" && npx vite --port "${STORE_PORT}" --host 0.0.0.0 > "${ROOT_DIR}/.logs/store.log" 2>&1) &
       STORE_PID=$!
     fi
 
     if [[ -d "${WEB_CMS_DIR}" ]]; then
-      echo -e "${CYAN}🚀 [3/3] Đang khởi động Web CMS & Xưởng 3D tại cổng ${CMS_PORT}...${NC}"
-      (cd "${WEB_CMS_DIR}" && npx next dev -p "${CMS_PORT}") &
+      (cd "${WEB_CMS_DIR}" && npx next dev -p "${CMS_PORT}" > "${ROOT_DIR}/.logs/cms.log" 2>&1) &
       CMS_PID=$!
     fi
 
-    sleep 2
+    # Đợi Backend & Store sẵn sàng
+    for i in {1..20}; do
+      if curl -s "http://localhost:${BACKEND_PORT}/api/health" >/dev/null 2>&1; then
+        break
+      fi
+      sleep 0.5
+    done
+    sleep 1
+
     print_access_guide
 
     wait
