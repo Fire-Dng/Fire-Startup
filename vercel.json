@@ -2,7 +2,13 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
   "framework": "vite",
-  "installCommand": "cd web-store && npm install",
-  "buildCommand": "cd web-store && npm run build",
-  "outputDirectory": "web-store/dist"
+  "installCommand": "if [ -d web-store ]; then cd web-store && npm install; else npm install; fi",
+  "buildCommand": "if [ -d web-store ]; then cd web-store && npm run build && cp -r dist ..; else npm run build; fi",
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
 }
