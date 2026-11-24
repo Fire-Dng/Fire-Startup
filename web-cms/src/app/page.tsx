@@ -155,9 +155,25 @@ const DEMO_CRAFTING_ORDER: Order = {
   paymentMethod: 'vietqr',
   paymentStatus: 'paid',
   status: 'in_crafting',
-  createdAt: new Date(Date.now() - 3600 * 1000 * 3).toISOString(),
-  updatedAt: new Date().toISOString(),
+  createdAt: '2026-11-24T08:30:00.000Z',
+  updatedAt: '2026-11-24T10:15:00.000Z',
 };
+
+function formatDateTimeDisplay(isoString: string, isEn: boolean): string {
+  try {
+    const d = new Date(isoString);
+    if (Number.isNaN(d.getTime())) return isoString;
+    return d.toLocaleString(isEn ? 'en-US' : 'vi-VN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return isoString;
+  }
+}
 
 function getOrderStatusBadge(
   status: OrderStatus,
@@ -191,6 +207,7 @@ export default function AdminCmsPage() {
   const { t, locale, setLocale } = useI18n();
   const isEn = locale === 'en';
 
+  const [isHydrated, setIsHydrated] = useState(false);
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light');
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -264,6 +281,7 @@ export default function AdminCmsPage() {
   };
 
   useEffect(() => {
+    setIsHydrated(true);
     let mounted = true;
     Promise.all([
       getAdminDashboard(),
@@ -570,7 +588,7 @@ export default function AdminCmsPage() {
             {row.orderCode}
           </Text>
           <Text type="supporting">
-            {new Date(row.createdAt).toLocaleString(isEn ? 'en-US' : 'vi-VN')}
+            {isHydrated ? formatDateTimeDisplay(row.createdAt, isEn) : row.createdAt.slice(0, 10)}
           </Text>
         </VStack>
       ),
@@ -925,6 +943,25 @@ export default function AdminCmsPage() {
     ? 'Cloudinary / Local Ready'
     : 'Cloudinary / Local Sẵn sàng';
 
+  if (!isHydrated) {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#F6FBFF',
+          color: '#0A1317',
+          fontSize: 14,
+          fontWeight: 500,
+        }}
+      >
+        Đang tải NetLoop CMS (Astryx Neutral)...
+      </div>
+    );
+  }
+
   return (
     <Theme theme={themes[defaultThemeSlug]} mode={themeMode}>
       <AppShell
@@ -1010,7 +1047,8 @@ export default function AdminCmsPage() {
                   {isEn ? 'Ghost Nets Recovered (BR-08)' : 'Lưới Thu Hồi Đại Dương (BR-08)'}
                 </Text>
                 <Text type="code" hasTabularNumbers>
-                  {(kpiStats.totalNetsGrams / 1000).toFixed(2)} kg ({kpiStats.totalNetsGrams.toLocaleString()}g)
+                  {(kpiStats.totalNetsGrams / 1000).toFixed(2)} kg (
+                  {kpiStats.totalNetsGrams.toLocaleString(isEn ? 'en-US' : 'vi-VN')}g)
                 </Text>
               </VStack>
             }
@@ -1018,13 +1056,13 @@ export default function AdminCmsPage() {
             <SideNavSection title={isEn ? 'Workshop Operations' : 'Vận hành xưởng 3D'}>
               <SideNavItem
                 label={isEn ? 'Overview & KPIs' : 'Tổng quan & Cảnh báo'}
-                icon="info"
+                icon={isHydrated ? 'info' : undefined}
                 isSelected={activeTab === 'dashboard'}
                 onClick={() => setActiveTab('dashboard')}
               />
               <SideNavItem
                 label={isEn ? 'Orders & 3D Tickets' : 'Đơn hàng & Phiếu 3D'}
-                icon="calendar"
+                icon={isHydrated ? 'calendar' : undefined}
                 isSelected={activeTab === 'orders'}
                 endContent={<Badge variant="neutral" label={String(orders.length)} />}
                 onClick={() => setActiveTab('orders')}
@@ -1034,14 +1072,14 @@ export default function AdminCmsPage() {
             <SideNavSection title={isEn ? 'Catalog & Cloudinary' : 'Danh mục & Cloudinary'}>
               <SideNavItem
                 label={isEn ? 'Products & Images' : 'Sản phẩm & Hình ảnh'}
-                icon="viewColumns"
+                icon={isHydrated ? 'viewColumns' : undefined}
                 isSelected={activeTab === 'products'}
                 endContent={<Badge variant="neutral" label={String(products.length)} />}
                 onClick={() => setActiveTab('products')}
               />
               <SideNavItem
                 label={isEn ? 'Materials BOM (BR-04)' : 'Kho Vỏ sò / Ốc BOM'}
-                icon="wrench"
+                icon={isHydrated ? 'wrench' : undefined}
                 isSelected={activeTab === 'materials'}
                 endContent={
                   kpiStats.lowStockMats.length > 0 ? (
