@@ -44,34 +44,34 @@ export const ASSETS = {
   },
   products: {
     toteBagMain: mediaUrl(
-      'products/1795542747440-d392bc68-tui-xach-luoi-dai-duong-son-tra-thumb.jpg'
+      'products/1795545303057-caad3437-tui-xach-luoi-dai-duong-son-tra-main.jpg'
     ),
     toteBagAlt: mediaUrl(
-      'products/1795542748730-17e3da7d-tui-xach-luoi-dai-duong-son-tra-2.jpg'
+      'products/1795545303081-37abcaf8-tui-xach-luoi-dai-duong-son-tra-alt.jpg'
     ),
     meshShoulderBag: mediaUrl(
-      'products/1795542767197-cbd7db6f-tui-deo-cheo-luoi-bien-hoi-an-vintage-thumb.jpg'
+      'products/1795545303099-45dd62ea-tui-deo-cheo-luoi-bien-hoi-an-vintage.jpg'
     ),
     wovenHandbag: mediaUrl(
-      'products/1795542754343-7e3c4a34-gio-dung-do-luoi-bien-cu-lao-cham-2.jpg'
+      'products/1795545303084-c1020e5a-gio-dung-do-luoi-bien-cu-lao-cham-alt.jpg'
     ),
     marketBasket: mediaUrl(
-      'products/1795542753324-c7d6e68d-gio-dung-do-luoi-bien-cu-lao-cham-thumb.jpg'
+      'products/1795545303083-1fecdbc2-gio-dung-do-luoi-bien-cu-lao-cham-main.jpg'
     ),
     braidedBracelet: mediaUrl(
-      'products/1795542762001-35940bc9-vong-tay-day-luoi-tet-thu-cong-my-khe-thumb.jpg'
+      'products/1795545303239-9879423e-vong-tay-day-luoi-tet-thu-cong-my-khe.jpg'
     ),
     zipWallet: mediaUrl(
-      'products/1795542755473-14fe3da8-vi-tien-khoa-keo-soi-luoi-thanh-khe-thumb.jpg'
+      'products/1795545303085-2f9a57fc-vi-tien-khoa-keo-soi-luoi-thanh-khe.jpg'
     ),
     oceanVest: mediaUrl(
-      'products/1795542759144-5b9994ca-ao-khoac-gile-luoi-tai-che-hai-van-thumb.jpg'
+      'products/1795545303408-b9a48ccb-ao-khoac-gile-luoi-tai-che-hai-van.jpg'
     ),
     shellCharmHolder: mediaUrl(
-      'products/1795542763029-d06f15f9-bo-phu-kien-charm-vo-so-oc-bien-tu-nhien-thumb.jpg'
+      'products/1795545303386-070c757f-bo-phu-kien-charm-vo-so-oc-bien-tu-nhien.jpg'
     ),
     coastalJewelry: mediaUrl(
-      'products/1795542768222-821bd09a-vong-tay-doi-hai-luu-xanh-ngoc-thumb.jpg'
+      'products/1795545303248-c7f07c2c-vong-tay-doi-hai-luu-xanh-ngoc.jpg'
     ),
   },
   materials: {
@@ -82,7 +82,7 @@ export const ASSETS = {
   },
   placeholders: {
     product: mediaUrl(
-      'products/1795542747440-d392bc68-tui-xach-luoi-dai-duong-son-tra-thumb.jpg'
+      'products/1795545303057-caad3437-tui-xach-luoi-dai-duong-son-tra-main.jpg'
     ),
     qrCode: ENV.VIETQR_FALLBACK_URL,
   },

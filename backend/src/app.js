@@ -82,6 +82,23 @@ const healthCheckHandler = (req, res) => {
   });
 };
 
+// Root & Favicon handlers (Prevent Render health probe HEAD/GET / and browser /favicon.ico 404 logs)
+app.get('/', (req, res) => {
+  return sendSuccess(res, {
+    statusCode: 200,
+    message: 'WAVO × ECO GREEN Backend API Server is running',
+    data: {
+      service: 'dtu-upcycled-3d-backend',
+      status: 'ok',
+      healthEndpoint: '/api/health',
+      apiBase: '/api',
+      timestamp: new Date().toISOString(),
+    },
+  });
+});
+
+app.get('/favicon.ico', (_req, res) => res.status(204).end());
+
 app.get('/api/health', healthCheckHandler);
 app.get('/api/ping', healthCheckHandler);
 
