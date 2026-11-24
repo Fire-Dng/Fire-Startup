@@ -1473,7 +1473,11 @@ export default function AdminCmsPage() {
           {/* Minimal Top Bar for Language & Theme Switching */}
           <HStack gap={2} vAlign="center" hAlign="between" padding={4}>
             <HStack gap={2} vAlign="center">
-              <StatusDot variant="accent" isPulsing label="WAVO CMS" />
+              <img
+                src="/favicon.svg"
+                alt="WAVO Logo"
+                style={{ width: 28, height: 28, borderRadius: 7 }}
+              />
               <Text weight="semibold">WAVO × ECO GREEN CMS</Text>
             </HStack>
 
@@ -1506,10 +1510,20 @@ export default function AdminCmsPage() {
               style={{ width: '100%', maxWidth: 440 }}
             >
               <VStack gap={5}>
-                <VStack gap={1} hAlign="center">
+                <VStack gap={2} hAlign="center">
+                  <img
+                    src="/favicon.svg"
+                    alt="WAVO Emblem"
+                    style={{
+                      width: 52,
+                      height: 52,
+                      borderRadius: 14,
+                      boxShadow: '0 8px 20px rgba(6, 59, 67, 0.18)',
+                    }}
+                  />
                   <Badge variant="neutral" label="Astryx Neutral Admin Portal" />
                   <Heading level={1}>
-                    {isEn ? 'Sign in to NetLoop CMS' : 'Đăng Nhập Quản Trị Xưởng 3D'}
+                    {isEn ? 'Sign in to WAVO CMS' : 'Đăng Nhập Quản Trị Xưởng 3D'}
                   </Heading>
                   <Text type="supporting">
                     {isEn
@@ -1644,6 +1658,11 @@ export default function AdminCmsPage() {
                 <SideNavCollapseButton
                   collapsible={sideNavCollapseConfig}
                   size="sm"
+                />
+                <img
+                  src="/favicon.svg"
+                  alt="WAVO Logo"
+                  style={{ width: 28, height: 28, borderRadius: 7 }}
                 />
                 <TopNavHeading
                   heading="WAVO × ECO GREEN CMS"

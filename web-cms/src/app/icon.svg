@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="wavoIconBg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#063B43" />
+      <stop offset="100%" stop-color="#04262C" />
+    </linearGradient>
+    <linearGradient id="wavoIconAccent" x1="8" y1="48" x2="56" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#34D399" />
+      <stop offset="100%" stop-color="#38BDF8" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#wavoIconBg)" />
+  <rect x="1.5" y="1.5" width="61" height="61" rx="14.5" stroke="#34D399" stroke-opacity="0.32" stroke-width="1.5" />
+  <path
+    d="M11 20L19.5 41.5C20.3 43.5 23.1 43.5 23.9 41.5L31.2 23.5C31.6 22.5 32.9 22.5 33.3 23.5L40.6 41.5C41.4 43.5 44.2 43.5 45 41.5L53.5 20H46.8L42.3 32.6L36.8 19.6C35.9 17.5 32.9 17.5 32 19.6L26.5 32.6L22 20H11Z"
+    fill="#F8F6F1"
+  />
+  <path
+    d="M15 49.5C20.5 46.5 26 52.5 32 49.5C38 46.5 43.5 52.5 49 49.5"
+    stroke="url(#wavoIconAccent)"
+    stroke-width="3.5"
+    stroke-linecap="round"
+  />
+</svg>

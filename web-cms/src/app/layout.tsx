@@ -28,9 +28,17 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'NetLoop CMS | Hệ Thống Quản Trị Xưởng Thủ Công & Máy Trạm 3D Inspector (Astryx Neutral)',
+  title: 'WAVO × ECO GREEN CMS | Quản Trị Xưởng Thủ Công & Máy Trạm 3D Inspector',
   description:
     'Ứng dụng Web CMS độc lập thiết kế bằng Astryx Design System (Neutral Theme): Quản lý đơn hàng, Phiếu chế tác 3D Inspector, Kho vỏ sò BOM và Sản phẩm Cloudinary.',
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/apple-touch-icon.png', type: 'image/png' },
+    ],
+    shortcut: '/favicon.svg',
+    apple: '/apple-touch-icon.png',
+  },
 };
 
 export default function CmsRootLayout({
