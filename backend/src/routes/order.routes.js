@@ -18,9 +18,9 @@ router.get('/lookup/:orderCode', lookupOrder);
 router.post('/:orderCode/cancel', optionalAuth, cancelOrderByCustomer);
 
 // CMS Staff/Admin routes (PATCH /:id/status also supports Customer cancel when status === 'cancelled' per BR-05)
-router.get('/', optionalAuth, getOrders);
+router.get('/', verifyToken, requireRole('admin', 'staff'), getOrders);
 router.get('/:id', optionalAuth, getOrderById);
 router.patch('/:id/status', optionalAuth, changeOrderStatus);
-router.patch('/:id/payment', optionalAuth, changeOrderPayment);
+router.patch('/:id/payment', verifyToken, requireRole('admin', 'staff'), changeOrderPayment);
 
 module.exports = router;

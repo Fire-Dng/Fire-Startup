@@ -12,6 +12,7 @@ const { getMessage } = require('./i18n/messages');
 
 const authRoutes = require('./routes/auth.routes');
 const contentRoutes = require('./routes/content.routes');
+const categoryRoutes = require('./routes/category.routes');
 const productRoutes = require('./routes/product.routes');
 const materialRoutes = require('./routes/material.routes');
 const customDesignRoutes = require('./routes/customDesign.routes');
@@ -87,6 +88,7 @@ app.get('/api/ping', healthCheckHandler);
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/content', contentRoutes);
+app.use('/api/categories', categoryRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/materials', materialRoutes);
 app.use('/api/custom-designs', customDesignRoutes);

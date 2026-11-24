@@ -118,19 +118,31 @@ const getOrderById = asyncHandler(async (req, res) => {
 
 const changeOrderStatus = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { status, note } = req.body;
+  const { status, note, phone } = req.body;
   const lang = resolveLang(req);
 
   if (!status) {
     throw new AppError(getMessage('MISSING_STATUS', {}, req), 400, 'MISSING_STATUS');
   }
 
+  const isStaffOrAdmin = req.user && ['admin', 'staff'].includes(req.user.role);
+  const isCustomerCancelRequest = status === 'cancelled' && !isStaffOrAdmin;
+
+  if (!isStaffOrAdmin && status !== 'cancelled') {
+    throw new AppError(
+      getMessage('FORBIDDEN', {}, req),
+      req.user ? 403 : 401,
+      req.user ? 'FORBIDDEN' : 'UNAUTHORIZED'
+    );
+  }
+
   const updated = await updateOrderStatus({
     orderIdOrCode: id,
     nextStatus: status,
     note,
-    actorName: req.user ? `${req.user.fullName} (${req.user.role})` : 'Admin/Artisan',
-    isCustomerCancel: false,
+    actorName: req.user ? `${req.user.fullName} (${req.user.role})` : 'Khách hàng',
+    isCustomerCancel: isCustomerCancelRequest,
+    phone: phone || '',
     lang,
   });
 

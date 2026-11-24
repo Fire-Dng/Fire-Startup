@@ -54,22 +54,6 @@ const customMaterialSchema = new mongoose.Schema(
     model3D: {
       meshPreset: {
         type: String,
-        enum: [
-          'scallop_shell',
-          'cockle_shell',
-          'cowrie_shell',
-          'spiral_snail',
-          'turban_snail',
-          'horn_snail',
-          'starfish_charm',
-          'seahorse_charm',
-          'turtle_charm',
-          'anchor_charm',
-          'pearl_bead',
-          'sea_glass_bead',
-          'wood_bead',
-          'fishing_cord_knot',
-        ],
         default: 'scallop_shell',
       },
       glbUrl: {

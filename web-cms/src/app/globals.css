@@ -12,3 +12,11 @@ body {
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   -webkit-font-smoothing: antialiased;
 }
+
+/* Hide Next.js DevTools floating badge/portal so it never overlaps the CMS SideNav */
+nextjs-portal,
+[data-nextjs-toast],
+[data-nextjs-dialog-overlay],
+#__next-build-watcher {
+  display: none !important;
+}

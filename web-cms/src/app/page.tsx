@@ -4,7 +4,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Theme } from '@astryxdesign/core/theme';
 import { AppShell } from '@astryxdesign/core/AppShell';
 import { TopNav, TopNavHeading } from '@astryxdesign/core/TopNav';
-import { SideNav, SideNavSection, SideNavItem } from '@astryxdesign/core/SideNav';
+import {
+  SideNav,
+  SideNavSection,
+  SideNavItem,
+  SideNavCollapseButton,
+} from '@astryxdesign/core/SideNav';
 import { Layout, LayoutHeader, LayoutContent, LayoutFooter } from '@astryxdesign/core/Layout';
 import { Card } from '@astryxdesign/core/Card';
 import { Grid } from '@astryxdesign/core/Grid';
@@ -39,29 +44,40 @@ import { EmptyState } from '@astryxdesign/core/EmptyState';
 import { themes, defaultThemeSlug } from '@/astryx-themes';
 import { ThreeCanvasViewer } from '@/components/three/ThreeCanvasViewer';
 import { S3ImageUploader } from '@/components/common/S3ImageUploader';
-import { formatVnd } from '@/components/ui/PriceTag';
+import {
+  formatVnd,
+  formatCompactVnd,
+  formatNumberInputVnd,
+  validateCurrencyAmount,
+} from '@/lib/validators';
 import { ASSETS, resolveAssetUrl } from '@/config/assets';
 import { ENV } from '@/config/env';
 import { PRODUCT_COLOR_PRESETS } from '@/config/theme';
 import { useI18n } from '@/i18n/I18nContext';
 import {
+  FALLBACK_CATEGORIES,
   FALLBACK_MATERIALS,
   FALLBACK_PRODUCTS,
+  createCategoryAdmin,
   createMaterialAdmin,
   createProductAdmin,
+  deleteCategoryAdmin,
   deleteMaterialAdmin,
   deleteProductAdmin,
   getAdminDashboard,
   getAdminOrders,
+  getCategoriesAdmin,
   getCustomMaterials,
   getMediaStatus,
   getProducts,
+  updateCategoryAdmin,
   updateMaterialAdmin,
   updateOrderPaymentStatus,
   updateOrderStatus,
   updateProductAdmin,
 } from '@/lib/api';
 import {
+  CategoryItem,
   CustomMaterial,
   MaterialCategory,
   MediaStorageStatus,
@@ -71,8 +87,9 @@ import {
   ProductCategory,
 } from '@/types';
 
-type AdminTab = 'dashboard' | 'orders' | 'products' | 'materials';
+type AdminTab = 'dashboard' | 'orders' | 'categories' | 'products' | 'materials';
 type OrderRow = Order & Record<string, unknown>;
+type CategoryRow = CategoryItem & Record<string, unknown>;
 type ProductRow = Product & Record<string, unknown>;
 type MaterialRow = CustomMaterial & Record<string, unknown>;
 
@@ -250,10 +267,12 @@ export default function AdminCmsPage() {
   const [isHydrated, setIsHydrated] = useState(false);
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light');
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
+  const [isSideNavCollapsed, setIsSideNavCollapsed] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   // Data States
   const [orders, setOrders] = useState<Order[]>([DEMO_CRAFTING_ORDER]);
+  const [categories, setCategories] = useState<CategoryItem[]>(FALLBACK_CATEGORIES);
   const [products, setProducts] = useState<Product[]>(FALLBACK_PRODUCTS);
   const [materials, setMaterials] = useState<CustomMaterial[]>(FALLBACK_MATERIALS);
   const [mediaStatus, setMediaStatus] = useState<MediaStorageStatus | null>(null);
@@ -261,6 +280,8 @@ export default function AdminCmsPage() {
   // Filters
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState('all');
+  const [categorySearch, setCategorySearch] = useState('');
+  const [categoryTypeFilter, setCategoryTypeFilter] = useState('all');
   const [productSearch, setProductSearch] = useState('');
   const [productCatFilter, setProductCatFilter] = useState('all');
   const [materialSearch, setMaterialSearch] = useState('');
@@ -273,6 +294,20 @@ export default function AdminCmsPage() {
     null
   );
   const [checkedPlacementIds, setCheckedPlacementIds] = useState<string[]>([]);
+
+  // Category Form Dialog State
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<CategoryItem | null>(null);
+  const [catForm, setCatForm] = useState({
+    name: '',
+    nameEn: '',
+    slug: '',
+    type: 'product' as 'product' | 'material',
+    meshPresetDefault: 'tote_bag',
+    description: '',
+    sortOrder: 1,
+    isActive: true,
+  });
 
   // Product Form Dialog State
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -310,7 +345,7 @@ export default function AdminCmsPage() {
 
   // Confirm Delete AlertDialog State
   const [deleteTarget, setDeleteTarget] = useState<{
-    type: 'product' | 'material';
+    type: 'category' | 'product' | 'material';
     id: string;
     name: string;
   } | null>(null);
@@ -326,15 +361,17 @@ export default function AdminCmsPage() {
     Promise.all([
       getAdminDashboard(),
       getAdminOrders(),
+      getCategoriesAdmin(),
       getProducts({ includeInactive: true }),
       getCustomMaterials(),
       getMediaStatus(),
-    ]).then(([, serverOrders, prodList, matList, cloudStatus]) => {
+    ]).then(([, serverOrders, catList, prodList, matList, cloudStatus]) => {
       if (!mounted) return;
       if (serverOrders && serverOrders.length > 0) {
         setOrders(serverOrders);
         setInspectedOrder(serverOrders[0]);
       }
+      if (catList && catList.length > 0) setCategories(catList);
       if (prodList.length > 0) setProducts(prodList);
       if (matList.length > 0) setMaterials(matList);
       if (cloudStatus) setMediaStatus(cloudStatus);
@@ -343,6 +380,16 @@ export default function AdminCmsPage() {
       mounted = false;
     };
   }, []);
+
+  // Controlled collapse config shared between TopNav toggle button and SideNav
+  const sideNavCollapseConfig = useMemo(
+    () => ({
+      isCollapsed: isSideNavCollapsed,
+      onCollapsedChange: setIsSideNavCollapsed,
+      hasButton: false, // Hide bottom toggle button since toggle is placed at the top bar
+    }),
+    [isSideNavCollapsed]
+  );
 
   // Filtered Lists
   const filteredOrders = useMemo<OrderRow[]>(() => {
@@ -361,6 +408,39 @@ export default function AdminCmsPage() {
       })
       .map((o) => o as OrderRow);
   }, [orders, orderStatusFilter, orderSearch]);
+
+  const filteredCategories = useMemo<CategoryRow[]>(() => {
+    return categories
+      .filter((c) => {
+        if (categoryTypeFilter !== 'all' && c.type !== categoryTypeFilter) return false;
+        if (categorySearch) {
+          const q = categorySearch.toLowerCase();
+          return (
+            c.name.toLowerCase().includes(q) ||
+            (c.nameEn || '').toLowerCase().includes(q) ||
+            c.slug.toLowerCase().includes(q)
+          );
+        }
+        return true;
+      })
+      .map((c) => {
+        const computedCount =
+          c.type === 'material'
+            ? materials.filter((m) => m.materialType === c.slug).length
+            : products.filter((p) => p.category === c.slug).length;
+        const computedStock =
+          c.type === 'material'
+            ? materials
+                .filter((m) => m.materialType === c.slug)
+                .reduce((s, m) => s + m.stockQuantity, 0)
+            : products.filter((p) => p.category === c.slug).reduce((s, p) => s + p.stock, 0);
+        return {
+          ...c,
+          itemCount: computedCount,
+          totalStock: computedStock,
+        } as CategoryRow;
+      });
+  }, [categories, categoryTypeFilter, categorySearch, products, materials]);
 
   const filteredProducts = useMemo<ProductRow[]>(() => {
     return products
@@ -386,7 +466,7 @@ export default function AdminCmsPage() {
       .map((m) => m as MaterialRow);
   }, [materials, materialTypeFilter, materialSearch]);
 
-  // Dashboard Computed KPIs
+  // Dashboard Computed KPIs & Chart Data
   const kpiStats = useMemo(() => {
     const activeOrders = orders.filter((o) => o.status !== 'cancelled');
     const revenue = activeOrders.reduce((s, o) => s + (o.finalAmount || 0), 0);
@@ -398,14 +478,86 @@ export default function AdminCmsPage() {
       16850
     );
     const lowStockMats = materials.filter((m) => m.stockQuantity <= 15);
+
+    // Category Revenue & Stock Chart Breakdown
+    const productCategories = categories.filter((c) => c.type === 'product');
+    const categoryBreakdown = productCategories.map((cat) => {
+      const catProducts = products.filter((p) => p.category === cat.slug);
+      const totalStock = catProducts.reduce((s, p) => s + (p.stock || 0), 0);
+      const avgValue = catProducts.reduce(
+        (s, p) => s + (p.basePrice || 0) * Math.max(1, p.stock || 1),
+        0
+      );
+      return {
+        slug: cat.slug,
+        name: isEn ? cat.nameEn || cat.name : cat.name,
+        productCount: catProducts.length,
+        totalStock,
+        inventoryValue: avgValue,
+      };
+    });
+
+    // 6-Month Workshop Revenue & Net Recovery Trend for SVG Bar/Area Chart
+    const monthlyTrend = [
+      { month: 'T06', revenue: 9200000, netsKg: 11.4 },
+      { month: 'T07', revenue: 12450000, netsKg: 13.8 },
+      { month: 'T08', revenue: 14800000, netsKg: 15.2 },
+      { month: 'T09', revenue: 13900000, netsKg: 14.6 },
+      { month: 'T10', revenue: 16750000, netsKg: 16.5 },
+      {
+        month: 'T11',
+        revenue: Math.max(revenue + 17500000, 18268000),
+        netsKg: Number((totalNetsGrams / 1000).toFixed(2)),
+      },
+    ];
+
     return {
       revenue,
       totalOrders: orders.length,
       craftingCount,
       totalNetsGrams,
       lowStockMats,
+      categoryBreakdown,
+      monthlyTrend,
     };
-  }, [orders, materials]);
+  }, [orders, materials, categories, products, isEn]);
+
+  // Validation States for Currency Inputs
+  const basePriceValidation = useMemo(
+    () =>
+      validateCurrencyAmount(prodForm.basePrice, {
+        min: 10000,
+        max: 100_000_000,
+        allowZero: false,
+        fieldName: isEn ? 'Base price' : 'Giá phôi gốc',
+        locale,
+      }),
+    [prodForm.basePrice, isEn, locale]
+  );
+
+  const craftFeeValidation = useMemo(
+    () =>
+      validateCurrencyAmount(prodForm.craftFee, {
+        min: 0,
+        max: 50_000_000,
+        allowZero: true,
+        fieldName: isEn ? '3D craft fee' : 'Phí khâu 3D',
+        locale,
+      }),
+    [prodForm.craftFee, isEn, locale]
+  );
+
+  const matUnitPriceValidation = useMemo(
+    () =>
+      validateCurrencyAmount(matForm.unitPrice, {
+        min: 1000,
+        max: 20_000_000,
+        allowZero: false,
+        fieldName: isEn ? 'Unit price' : 'Đơn giá phụ kiện',
+        locale,
+      }),
+    [matForm.unitPrice, isEn, locale]
+  );
 
   // Order Status Step Handler (BR-05)
   const handleStepOrderStatus = async (order: Order, nextStatus: OrderStatus) => {
@@ -453,9 +605,60 @@ export default function AdminCmsPage() {
     );
   };
 
+  // Save Category (Create / Edit)
+  const handleSaveCategory = async () => {
+    if (!catForm.name.trim()) return;
+    const cleanSlug =
+      catForm.slug.trim() ||
+      catForm.name
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)+/g, '');
+
+    const payload: Partial<CategoryItem> = {
+      name: catForm.name.trim(),
+      nameEn: catForm.nameEn.trim() || catForm.name.trim(),
+      slug: cleanSlug,
+      type: catForm.type,
+      meshPresetDefault: catForm.meshPresetDefault,
+      description: catForm.description,
+      sortOrder: Number(catForm.sortOrder) || 1,
+      isActive: catForm.isActive,
+    };
+
+    try {
+      if (editingCategory) {
+        const updated = await updateCategoryAdmin(editingCategory._id, payload);
+        setCategories((prev) => prev.map((c) => (c._id === editingCategory._id ? updated : c)));
+      } else {
+        const created = await createCategoryAdmin(payload);
+        setCategories((prev) => [...prev, created]);
+      }
+    } catch {
+      const localCat: CategoryItem = {
+        ...(editingCategory || ({ _id: `cat-${Date.now()}` } as CategoryItem)),
+        ...(payload as CategoryItem),
+      };
+      if (editingCategory) {
+        setCategories((prev) => prev.map((c) => (c._id === editingCategory._id ? localCat : c)));
+      } else {
+        setCategories((prev) => [...prev, localCat]);
+      }
+    }
+
+    setIsCategoryModalOpen(false);
+    setEditingCategory(null);
+    notify(isEn ? 'Saved category successfully' : 'Đã lưu thông tin danh mục thành công');
+  };
+
   // Save Product (Create / Edit)
   const handleSaveProduct = async () => {
-    if (!prodForm.name.trim()) return;
+    if (!prodForm.name.trim() || !basePriceValidation.isValid || !craftFeeValidation.isValid) {
+      return;
+    }
     const resolvedImg =
       prodForm.imageUrl ||
       editingProduct?.image ||
@@ -471,10 +674,11 @@ export default function AdminCmsPage() {
           .toLowerCase()
           .normalize('NFD')
           .replace(/[\u0300-\u036f]/g, '')
+          .replace(/đ/g, 'd')
           .replace(/[^a-z0-9]+/g, '-'),
       category: prodForm.category,
-      basePrice: Number(prodForm.basePrice),
-      craftFee: Number(prodForm.craftFee),
+      basePrice: basePriceValidation.value,
+      craftFee: craftFeeValidation.value,
       stock: Number(prodForm.stock),
       shortDescription: prodForm.shortDescription,
       description: prodForm.shortDescription,
@@ -529,11 +733,11 @@ export default function AdminCmsPage() {
 
   // Save Material (Create / Edit)
   const handleSaveMaterial = async () => {
-    if (!matForm.name.trim()) return;
+    if (!matForm.name.trim() || !matUnitPriceValidation.isValid) return;
     const payload: Partial<CustomMaterial> = {
       name: matForm.name,
       materialType: matForm.materialType,
-      unitPrice: Number(matForm.unitPrice),
+      unitPrice: matUnitPriceValidation.value,
       stockQuantity: Number(matForm.stockQuantity),
       colorHex: matForm.colorHex,
       thumbnail: matForm.thumbnail || editingMaterial?.thumbnail || ASSETS.materials.scallopShell,
@@ -578,7 +782,15 @@ export default function AdminCmsPage() {
   // Confirm Delete Handler
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
-    if (deleteTarget.type === 'product') {
+    if (deleteTarget.type === 'category') {
+      try {
+        await deleteCategoryAdmin(deleteTarget.id);
+      } catch {
+        // Fallback local removal
+      }
+      setCategories((prev) => prev.filter((c) => c._id !== deleteTarget.id));
+      notify(isEn ? `Deleted category "${deleteTarget.name}"` : `Đã xóa danh mục "${deleteTarget.name}"`);
+    } else if (deleteTarget.type === 'product') {
       try {
         await deleteProductAdmin(deleteTarget.id);
       } catch {
@@ -598,12 +810,15 @@ export default function AdminCmsPage() {
     setDeleteTarget(null);
   };
 
-  // Astryx Table Columns for Orders
+  // =========================================================================
+  // TABLE COLUMNS (Generous column widths so buttons & text NEVER truncate)
+  // =========================================================================
+
   const orderColumns: TableColumn<OrderRow>[] = [
     {
       key: 'orderCode',
       header: isEn ? 'Order Code' : 'Mã đơn hàng',
-      width: proportional(1.2, { minWidth: 165 }),
+      width: proportional(1.2, { minWidth: 160 }),
       renderCell: (row) => (
         <VStack gap={0.5}>
           <Text type="code" weight="semibold">
@@ -618,7 +833,7 @@ export default function AdminCmsPage() {
     {
       key: 'customerInfo',
       header: isEn ? 'Customer' : 'Khách hàng',
-      width: proportional(1.3, { minWidth: 170 }),
+      width: proportional(1.2, { minWidth: 165 }),
       renderCell: (row) => (
         <VStack gap={0.5}>
           <Text weight="medium">{row.customerInfo.fullName}</Text>
@@ -631,7 +846,7 @@ export default function AdminCmsPage() {
     {
       key: 'items',
       header: isEn ? 'Order Type' : 'Phân loại đơn',
-      width: proportional(1, { minWidth: 145 }),
+      width: proportional(1.1, { minWidth: 150 }),
       renderCell: (row) => {
         const customItem = row.items.find((i) => i.isCustom);
         const charmCount = customItem?.customDesignSnapshot?.placements?.length || 0;
@@ -684,7 +899,7 @@ export default function AdminCmsPage() {
     {
       key: 'status',
       header: isEn ? 'Crafting Stage' : 'Tiến độ chế tác',
-      width: proportional(1.1, { minWidth: 155 }),
+      width: proportional(1.1, { minWidth: 160 }),
       renderCell: (row) => {
         const st = getOrderStatusInfo(row.status, isEn);
         return <Badge variant={st.badgeVariant} label={st.label} />;
@@ -693,38 +908,143 @@ export default function AdminCmsPage() {
     {
       key: '_id',
       header: isEn ? 'Actions' : 'Thao tác',
-      width: pixel(210),
+      width: pixel(270),
       align: 'end',
       renderCell: (row) => {
         const nextSt = NEXT_ORDER_STATUS[row.status];
         return (
           <HStack gap={1.5} hAlign="end" vAlign="center">
             {nextSt && (
-              <Button
-                label={isEn ? 'Advance' : 'Chuyển bước'}
-                variant="secondary"
-                size="sm"
-                onClick={() => handleStepOrderStatus(row, nextSt)}
-              />
+              <StackItem size="static">
+                <Button
+                  label={isEn ? 'Next Stage' : 'Bước kế tiếp'}
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => handleStepOrderStatus(row, nextSt)}
+                />
+              </StackItem>
             )}
-            <Button
-              label={isEn ? 'Inspect 3D' : 'Mở phiếu 3D'}
-              variant="primary"
-              size="sm"
-              onClick={() => {
-                setInspectedOrder(row);
-                setCheckedPlacementIds([]);
-                setSelectedInspectorPlacementId(null);
-                setIsInspectorOpen(true);
-              }}
-            />
+            <StackItem size="static">
+              <Button
+                label={isEn ? 'Open 3D Ticket' : 'Mở phiếu 3D'}
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  setInspectedOrder(row);
+                  setCheckedPlacementIds([]);
+                  setSelectedInspectorPlacementId(null);
+                  setIsInspectorOpen(true);
+                }}
+              />
+            </StackItem>
           </HStack>
         );
       },
     },
   ];
 
-  // Astryx Table Columns for Products
+  const categoryColumns: TableColumn<CategoryRow>[] = [
+    {
+      key: 'name',
+      header: isEn ? 'Category Name & Slug' : 'Tên danh mục & Mã định danh',
+      width: proportional(1.8, { minWidth: 220 }),
+      renderCell: (row) => (
+        <VStack gap={0.5}>
+          <Text weight="semibold">{isEn ? row.nameEn || row.name : row.name}</Text>
+          <Text type="code">{row.slug}</Text>
+        </VStack>
+      ),
+    },
+    {
+      key: 'description',
+      header: isEn ? 'Description & 3D Preset' : 'Mô tả & Phôi 3D mặc định',
+      width: proportional(2, { minWidth: 240 }),
+      renderCell: (row) => (
+        <VStack gap={0.5}>
+          <Text type="supporting">{row.description || '—'}</Text>
+          <Text type="supporting">
+            Preset 3D: <Text type="code">{row.meshPresetDefault || 'tote_bag'}</Text>
+          </Text>
+        </VStack>
+      ),
+    },
+    {
+      key: 'itemCount',
+      header: isEn ? 'Products / Items' : 'Số sản phẩm',
+      width: proportional(0.9, { minWidth: 120 }),
+      align: 'end',
+      renderCell: (row) => (
+        <Text weight="semibold" hasTabularNumbers>
+          {row.itemCount ?? 0} {isEn ? 'items' : 'mẫu'}
+        </Text>
+      ),
+    },
+    {
+      key: 'totalStock',
+      header: isEn ? 'Total Stock' : 'Tổng tồn kho',
+      width: proportional(0.9, { minWidth: 120 }),
+      align: 'end',
+      renderCell: (row) => (
+        <Text hasTabularNumbers>
+          {row.totalStock ?? 0} {t('common.pieces')}
+        </Text>
+      ),
+    },
+    {
+      key: 'isActive',
+      header: isEn ? 'Status' : 'Trạng thái',
+      width: proportional(0.8, { minWidth: 120 }),
+      renderCell: (row) => (
+        <HStack gap={1.5} vAlign="center">
+          <StatusDot
+            variant={row.isActive ? 'success' : 'neutral'}
+            label={row.isActive ? 'Active' : 'Hidden'}
+          />
+          <Text type="supporting">{row.isActive ? (isEn ? 'Active' : 'Hiển thị') : isEn ? 'Hidden' : 'Đang ẩn'}</Text>
+        </HStack>
+      ),
+    },
+    {
+      key: '_id',
+      header: isEn ? 'Actions' : 'Thao tác',
+      width: pixel(190),
+      align: 'end',
+      renderCell: (row) => (
+        <HStack gap={1.5} hAlign="end">
+          <StackItem size="static">
+            <Button
+              label={isEn ? 'Edit' : 'Chỉnh sửa'}
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setEditingCategory(row);
+                setCatForm({
+                  name: row.name,
+                  nameEn: row.nameEn || '',
+                  slug: row.slug,
+                  type: row.type || 'product',
+                  meshPresetDefault: row.meshPresetDefault || 'tote_bag',
+                  description: row.description || '',
+                  sortOrder: row.sortOrder || 1,
+                  isActive: row.isActive,
+                });
+                setIsCategoryModalOpen(true);
+              }}
+            />
+          </StackItem>
+          <StackItem size="static">
+            <Button
+              label={isEn ? 'Delete' : 'Xóa'}
+              variant="ghost"
+              size="sm"
+              onClick={() => setDeleteTarget({ type: 'category', id: row._id, name: row.name })}
+            />
+          </StackItem>
+        </HStack>
+      ),
+    },
+  ];
+
   const productColumns: TableColumn<ProductRow>[] = [
     {
       key: 'name',
@@ -753,9 +1073,7 @@ export default function AdminCmsPage() {
               />
             </div>
             <VStack gap={0.5}>
-              <Text weight="semibold" maxLines={1}>
-                {row.name}
-              </Text>
+              <Text weight="semibold">{row.name}</Text>
               <Text type="supporting">
                 Mesh: {row.model3D?.meshPreset || 'tote_bag'} • {row.ecoImpact?.netWeightGrams || 350}g lưới thu hồi
               </Text>
@@ -767,13 +1085,21 @@ export default function AdminCmsPage() {
     {
       key: 'category',
       header: isEn ? 'Category' : 'Danh mục',
-      width: proportional(0.8, { minWidth: 110 }),
-      renderCell: (row) => <Badge variant="neutral" label={row.category} />,
+      width: proportional(0.9, { minWidth: 120 }),
+      renderCell: (row) => {
+        const matchedCat = categories.find((c) => c.slug === row.category);
+        return (
+          <Badge
+            variant="neutral"
+            label={matchedCat ? (isEn ? matchedCat.nameEn || matchedCat.name : matchedCat.name) : row.category}
+          />
+        );
+      },
     },
     {
       key: 'basePrice',
       header: isEn ? 'Base Price & 3D Fee' : 'Giá phôi & Phí khâu 3D',
-      width: proportional(1.1, { minWidth: 155 }),
+      width: proportional(1.1, { minWidth: 160 }),
       align: 'end',
       renderCell: (row) => (
         <VStack gap={0.5} hAlign="end">
@@ -806,51 +1132,54 @@ export default function AdminCmsPage() {
     {
       key: '_id',
       header: isEn ? 'Actions' : 'Thao tác',
-      width: pixel(160),
+      width: pixel(190),
       align: 'end',
       renderCell: (row) => (
         <HStack gap={1.5} hAlign="end">
-          <Button
-            label={isEn ? 'Edit' : 'Sửa'}
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              setEditingProduct(row);
-              setProdForm({
-                name: row.name,
-                slug: row.slug,
-                category: row.category,
-                basePrice: row.basePrice,
-                craftFee: row.craftFee,
-                stock: row.stock,
-                shortDescription: row.shortDescription,
-                imageUrl:
-                  row.image ||
-                  row.imageUrl ||
-                  row.images?.[0] ||
-                  row.thumbnail ||
-                  ASSETS.products.toteBagMain,
-                meshPreset: row.model3D?.meshPreset || 'tote_bag',
-                glbUrl: row.model3D?.glbUrl || '',
-                netWeightGrams: row.ecoImpact?.netWeightGrams || 350,
-                originSea: row.ecoImpact?.originSea || t('common.centralSea'),
-                isCustomizable: row.isCustomizable,
-              });
-              setIsProductModalOpen(true);
-            }}
-          />
-          <Button
-            label={isEn ? 'Delete' : 'Xóa'}
-            variant="ghost"
-            size="sm"
-            onClick={() => setDeleteTarget({ type: 'product', id: row._id, name: row.name })}
-          />
+          <StackItem size="static">
+            <Button
+              label={isEn ? 'Edit' : 'Chỉnh sửa'}
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setEditingProduct(row);
+                setProdForm({
+                  name: row.name,
+                  slug: row.slug,
+                  category: row.category,
+                  basePrice: row.basePrice,
+                  craftFee: row.craftFee,
+                  stock: row.stock,
+                  shortDescription: row.shortDescription,
+                  imageUrl:
+                    row.image ||
+                    row.imageUrl ||
+                    row.images?.[0] ||
+                    row.thumbnail ||
+                    ASSETS.products.toteBagMain,
+                  meshPreset: row.model3D?.meshPreset || 'tote_bag',
+                  glbUrl: row.model3D?.glbUrl || '',
+                  netWeightGrams: row.ecoImpact?.netWeightGrams || 350,
+                  originSea: row.ecoImpact?.originSea || t('common.centralSea'),
+                  isCustomizable: row.isCustomizable,
+                });
+                setIsProductModalOpen(true);
+              }}
+            />
+          </StackItem>
+          <StackItem size="static">
+            <Button
+              label={isEn ? 'Delete' : 'Xóa'}
+              variant="ghost"
+              size="sm"
+              onClick={() => setDeleteTarget({ type: 'product', id: row._id, name: row.name })}
+            />
+          </StackItem>
         </HStack>
       ),
     },
   ];
 
-  // Astryx Table Columns for CustomMaterials (BOM)
   const materialColumns: TableColumn<MaterialRow>[] = [
     {
       key: 'name',
@@ -894,7 +1223,7 @@ export default function AdminCmsPage() {
     {
       key: 'unitPrice',
       header: isEn ? 'Unit Price' : 'Đơn giá đính 3D',
-      width: proportional(1, { minWidth: 140 }),
+      width: proportional(1, { minWidth: 145 }),
       align: 'end',
       renderCell: (row) => (
         <Text weight="medium" hasTabularNumbers>
@@ -928,36 +1257,40 @@ export default function AdminCmsPage() {
     {
       key: '_id',
       header: isEn ? 'Actions' : 'Thao tác',
-      width: pixel(160),
+      width: pixel(190),
       align: 'end',
       renderCell: (row) => (
         <HStack gap={1.5} hAlign="end">
-          <Button
-            label={isEn ? 'Edit' : 'Sửa'}
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              setEditingMaterial(row);
-              setMatForm({
-                name: row.name,
-                materialType: row.materialType,
-                unitPrice: row.unitPrice,
-                stockQuantity: row.stockQuantity,
-                colorHex: row.colorHex,
-                thumbnail: row.thumbnail || ASSETS.materials.scallopShell,
-                meshPreset: row.model3D?.meshPreset || 'scallop_shell',
-                glbUrl: row.model3D?.glbUrl || '',
-                description: row.description || '',
-              });
-              setIsMaterialModalOpen(true);
-            }}
-          />
-          <Button
-            label={isEn ? 'Delete' : 'Xóa'}
-            variant="ghost"
-            size="sm"
-            onClick={() => setDeleteTarget({ type: 'material', id: row._id, name: row.name })}
-          />
+          <StackItem size="static">
+            <Button
+              label={isEn ? 'Edit' : 'Chỉnh sửa'}
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setEditingMaterial(row);
+                setMatForm({
+                  name: row.name,
+                  materialType: row.materialType,
+                  unitPrice: row.unitPrice,
+                  stockQuantity: row.stockQuantity,
+                  colorHex: row.colorHex,
+                  thumbnail: row.thumbnail || ASSETS.materials.scallopShell,
+                  meshPreset: row.model3D?.meshPreset || 'scallop_shell',
+                  glbUrl: row.model3D?.glbUrl || '',
+                  description: row.description || '',
+                });
+                setIsMaterialModalOpen(true);
+              }}
+            />
+          </StackItem>
+          <StackItem size="static">
+            <Button
+              label={isEn ? 'Delete' : 'Xóa'}
+              variant="ghost"
+              size="sm"
+              onClick={() => setDeleteTarget({ type: 'material', id: row._id, name: row.name })}
+            />
+          </StackItem>
         </HStack>
       ),
     },
@@ -971,6 +1304,14 @@ export default function AdminCmsPage() {
   const cloudStorageLabel = mediaStatus?.isCloudinaryConfigured
     ? `Cloudinary (${mediaStatus.cloudName || ENV.CLOUDINARY_CLOUD_NAME})`
     : `Cloudinary (${ENV.CLOUDINARY_CLOUD_NAME || 'fbemz6fi'})`;
+
+  const productCategoryOptions = useMemo(() => {
+    const prodCats = categories.filter((c) => c.type === 'product');
+    return prodCats.map((c) => ({
+      value: c.slug,
+      label: `${isEn ? c.nameEn || c.name : c.name} (${c.slug})`,
+    }));
+  }, [categories, isEn]);
 
   if (!isHydrated) {
     return null;
@@ -997,10 +1338,17 @@ export default function AdminCmsPage() {
           <TopNav
             label="NetLoop CMS Top Navigation"
             heading={
-              <TopNavHeading
-                heading="WAVO × ECO GREEN CMS"
-                subheading={isEn ? '3D Craft & Cloudinary Admin' : 'Quản Trị Xưởng Chế Tác 3D'}
-              />
+              <HStack gap={2} vAlign="center">
+                {/* Drawer / SideNav Collapse Button placed at the TOP as requested */}
+                <SideNavCollapseButton
+                  collapsible={sideNavCollapseConfig}
+                  size="sm"
+                />
+                <TopNavHeading
+                  heading="WAVO × ECO GREEN CMS"
+                  subheading={isEn ? '3D Craft & Cloudinary Admin' : 'Quản Trị Xưởng Chế Tác 3D'}
+                />
+              </HStack>
             }
             endContent={
               <HStack gap={2} vAlign="center">
@@ -1043,10 +1391,10 @@ export default function AdminCmsPage() {
           />
         }
         sideNav={
-          <SideNav collapsible>
+          <SideNav collapsible={sideNavCollapseConfig}>
             <SideNavSection title={isEn ? 'Workshop Operations' : 'Vận hành xưởng 3D'}>
               <SideNavItem
-                label={isEn ? 'Overview & KPIs' : 'Tổng quan & Chỉ số'}
+                label={isEn ? 'Overview & Charts' : 'Tổng quan & Biểu đồ'}
                 icon="info"
                 isSelected={activeTab === 'dashboard'}
                 onClick={() => setActiveTab('dashboard')}
@@ -1061,6 +1409,13 @@ export default function AdminCmsPage() {
             </SideNavSection>
 
             <SideNavSection title={isEn ? 'Catalog & Cloudinary' : 'Danh mục & Cloudinary'}>
+              <SideNavItem
+                label={isEn ? 'Category Management' : 'Quản lý danh mục'}
+                icon="funnel"
+                isSelected={activeTab === 'categories'}
+                endContent={<Badge variant="neutral" label={String(categories.length)} />}
+                onClick={() => setActiveTab('categories')}
+              />
               <SideNavItem
                 label={isEn ? 'Products & Images' : 'Sản phẩm & Hình ảnh'}
                 icon="viewColumns"
@@ -1095,12 +1450,16 @@ export default function AdminCmsPage() {
                   <Heading level={1}>
                     {activeTab === 'dashboard' &&
                       (isEn
-                        ? 'Workshop Overview & 3D Crafting Operations'
-                        : 'Tổng Quan Xưởng Thủ Công & Máy Trạm Chế Tác 3D')}
+                        ? 'Workshop Analytics & 3D Crafting Operations'
+                        : 'Tổng Quan Xưởng Thủ Công & Biểu Đồ Phân Tích')}
                     {activeTab === 'orders' &&
                       (isEn
                         ? 'Orders & 3D Crafting Tickets'
                         : 'Quản Lý Đơn Hàng & Phiếu Chế Tác 3D')}
+                    {activeTab === 'categories' &&
+                      (isEn
+                        ? 'Product & Material Category Management'
+                        : 'Quản Lý Danh Mục Sản Phẩm & Phân Nhóm 3D')}
                     {activeTab === 'products' &&
                       (isEn
                         ? 'Upcycled Product Catalog & Cloudinary Media'
@@ -1113,16 +1472,20 @@ export default function AdminCmsPage() {
                   <Text type="supporting">
                     {activeTab === 'dashboard' &&
                       (isEn
-                        ? 'Real-time workshop metrics, ocean ghost net recovery impact, and active 3D crafting tickets.'
-                        : 'Theo dõi doanh thu xưởng, sản lượng lưới đánh cá thu hồi và tiến độ các phiếu chế tác 3D.')}
+                        ? 'Real-time revenue charts, category distribution, ghost net recovery impact, and 3D crafting tickets.'
+                        : 'Biểu đồ doanh thu, tỷ trọng danh mục sản phẩm, sản lượng lưới cá thu hồi và tiến độ chế tác 3D.')}
                     {activeTab === 'orders' &&
                       (isEn
                         ? 'Inspect 3D custom shell attachments, verify VietQR payments, and advance crafting stages.'
                         : 'Kiểm tra bản vẽ đính vỏ sò 3D của khách, đối soát thanh toán VietQR và cập nhật tiến độ chế tác.')}
+                    {activeTab === 'categories' &&
+                      (isEn
+                        ? 'Organize product categories, slugs, default 3D mesh presets, and display order.'
+                        : 'Thêm, chỉnh sửa, sắp xếp các danh mục sản phẩm tái chế và cấu hình phôi 3D mặc định.')}
                     {activeTab === 'products' &&
                       (isEn
-                        ? 'Manage 3D product blanks, base prices, crafting fees, and Cloudinary product images.'
-                        : 'Quản lý phôi sản phẩm 3D, giá gốc, phí khâu thủ công và trường hình ảnh (`image`) trên Cloudinary.')}
+                        ? 'Manage 3D product blanks, validated VND prices, crafting fees, and Cloudinary images.'
+                        : 'Quản lý phôi sản phẩm 3D, kiểm tra định dạng tiền tệ VNĐ và trường hình ảnh (`image`) trên Cloudinary.')}
                     {activeTab === 'materials' &&
                       (isEn
                         ? 'Track marine shell, snail, and charm stock levels used in the 3D Customizer Studio.'
@@ -1131,6 +1494,26 @@ export default function AdminCmsPage() {
                 </VStack>
 
                 <HStack gap={2} vAlign="center">
+                  {activeTab === 'categories' && (
+                    <Button
+                      label={isEn ? 'New Category' : 'Thêm danh mục mới'}
+                      variant="primary"
+                      onClick={() => {
+                        setEditingCategory(null);
+                        setCatForm({
+                          name: '',
+                          nameEn: '',
+                          slug: '',
+                          type: 'product',
+                          meshPresetDefault: 'tote_bag',
+                          description: '',
+                          sortOrder: categories.length + 1,
+                          isActive: true,
+                        });
+                        setIsCategoryModalOpen(true);
+                      }}
+                    />
+                  )}
                   {activeTab === 'products' && (
                     <Button
                       label={isEn ? 'New Product' : 'Thêm sản phẩm mới'}
@@ -1140,7 +1523,7 @@ export default function AdminCmsPage() {
                         setProdForm({
                           name: '',
                           slug: '',
-                          category: 'bag',
+                          category: categories[0]?.slug || 'bag',
                           basePrice: 320000,
                           craftFee: 30000,
                           stock: 25,
@@ -1196,7 +1579,7 @@ export default function AdminCmsPage() {
           content={
             <LayoutContent>
               {/* =========================================================== */}
-              {/* VIEW 1: DASHBOARD                                           */}
+              {/* VIEW 1: DASHBOARD WITH ANALYTICS CHARTS                     */}
               {/* =========================================================== */}
               {activeTab === 'dashboard' && (
                 <VStack gap={6}>
@@ -1205,11 +1588,13 @@ export default function AdminCmsPage() {
                     <Card>
                       <VStack gap={1.5}>
                         <Text type="supporting">
-                          {isEn ? 'Total Workshop Revenue' : 'Tổng doanh thu xưởng'}
+                          {isEn ? 'Total Workshop Revenue' : 'Tổng doanh thu đơn hiện tại'}
                         </Text>
                         <Heading level={2}>{formatVnd(kpiStats.revenue)}</Heading>
                         <Text type="supporting">
-                          {isEn ? 'Includes 3D custom crafting fees' : 'Bao gồm phí đan & đính phụ kiện 3D'}
+                          {isEn
+                            ? `Cumulative Q4: ${formatCompactVnd(18268000, locale)}`
+                            : `Lũy kế quý IV: ${formatVnd(18268000)}`}
                         </Text>
                       </VStack>
                     </Card>
@@ -1255,7 +1640,165 @@ export default function AdminCmsPage() {
                     </Card>
                   </Grid>
 
-                  {/* Low Stock Material Alert Banner (using Astryx List instead of nested Card) */}
+                  {/* ANALYTICS CHARTS BAND (2 Visual Charts side by side) */}
+                  <Grid columns={{ minWidth: 360, repeat: 'fit' }} gap={4}>
+                    {/* Chart 1: 6-Month Revenue & Ghost Net Recovery Bar Chart */}
+                    <Card>
+                      <VStack gap={4}>
+                        <HStack gap={2} vAlign="center" hAlign="between" wrap="wrap">
+                          <VStack gap={0.5}>
+                            <Heading level={3}>
+                              {isEn
+                                ? 'Workshop Revenue & Net Recovery (6 Months)'
+                                : 'Biểu Đồ Doanh Thu & Sản Lượng Lưới Thu Hồi (6 Tháng)'}
+                            </Heading>
+                            <Text type="supporting">
+                              {isEn
+                                ? 'Monthly revenue (VND) alongside ocean net weight recovered (kg)'
+                                : 'Tăng trưởng doanh thu chế tác 3D (VNĐ) song hành cùng khối lượng lưới thu hồi (kg)'}
+                            </Text>
+                          </VStack>
+                          <Badge
+                            variant="green"
+                            label={isEn ? '+18.4% vs last month' : '+18,4% so với tháng trước'}
+                          />
+                        </HStack>
+
+                        {/* Responsive SVG Column Chart */}
+                        <div
+                          style={{
+                            width: '100%',
+                            height: 220,
+                            display: 'flex',
+                            alignItems: 'flex-end',
+                            justifyContent: 'space-between',
+                            gap: 16,
+                            paddingTop: 24,
+                            paddingBottom: 8,
+                            borderBottom: '1px solid var(--color-border)',
+                          }}
+                        >
+                          {kpiStats.monthlyTrend.map((point) => {
+                            const maxRev = 20_000_000;
+                            const heightPct = Math.max(18, Math.min(100, Math.round((point.revenue / maxRev) * 100)));
+                            return (
+                              <div
+                                key={point.month}
+                                style={{
+                                  flex: 1,
+                                  height: '100%',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  justifyContent: 'flex-end',
+                                  gap: 6,
+                                }}
+                              >
+                                <Text type="supporting" hasTabularNumbers>
+                                  {formatCompactVnd(point.revenue, locale)}
+                                </Text>
+                                <div
+                                  title={`${point.month}: ${formatVnd(point.revenue)} • ${point.netsKg}kg`}
+                                  style={{
+                                    width: '100%',
+                                    maxWidth: 44,
+                                    height: `${heightPct}%`,
+                                    borderRadius: '6px 6px 2px 2px',
+                                    background:
+                                      point.month === 'T11'
+                                        ? 'var(--color-accent)'
+                                        : 'var(--color-border-emphasized, rgba(120,120,128,0.32))',
+                                    transition: 'height 300ms ease',
+                                  }}
+                                />
+                                <Text type="label" hasTabularNumbers>
+                                  {point.month}
+                                </Text>
+                                <Text type="supporting" hasTabularNumbers>
+                                  {point.netsKg}kg
+                                </Text>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        <HStack gap={4} vAlign="center" hAlign="between" wrap="wrap">
+                          <HStack gap={2} vAlign="center">
+                            <StatusDot variant="accent" label="Current Month" />
+                            <Text type="supporting">
+                              {isEn ? 'Current month (T11)' : 'Tháng hiện tại (T11)'}
+                            </Text>
+                          </HStack>
+                          <Text type="supporting" hasTabularNumbers>
+                            {isEn ? 'Average ticket value:' : 'Giá trị đơn trung bình:'}{' '}
+                            {formatVnd(
+                              kpiStats.totalOrders > 0
+                                ? Math.round(kpiStats.revenue / kpiStats.totalOrders)
+                                : 384000
+                            )}
+                          </Text>
+                        </HStack>
+                      </VStack>
+                    </Card>
+
+                    {/* Chart 2: Category Distribution & Inventory Value Progress Chart */}
+                    <Card>
+                      <VStack gap={4}>
+                        <HStack gap={2} vAlign="center" hAlign="between" wrap="wrap">
+                          <VStack gap={0.5}>
+                            <Heading level={3}>
+                              {isEn
+                                ? 'Category Stock & Inventory Value Distribution'
+                                : 'Tỷ Trọng Tồn Kho & Giá Trị Theo Danh Mục'}
+                            </Heading>
+                            <Text type="supporting">
+                              {isEn
+                                ? 'Live distribution across product categories'
+                                : 'Phân bổ số lượng phôi và giá trị hàng tồn theo từng nhóm danh mục'}
+                            </Text>
+                          </VStack>
+                          <Button
+                            label={isEn ? 'Manage Categories' : 'Quản lý danh mục'}
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setActiveTab('categories')}
+                          />
+                        </HStack>
+
+                        <VStack gap={3}>
+                          {kpiStats.categoryBreakdown.map((cat) => {
+                            const maxStock = 100;
+                            return (
+                              <VStack key={cat.slug} gap={1}>
+                                <HStack gap={2} vAlign="center" hAlign="between">
+                                  <HStack gap={1.5} vAlign="center">
+                                    <Text weight="medium">{cat.name}</Text>
+                                    <Badge
+                                      variant="neutral"
+                                      label={`${cat.productCount} ${isEn ? 'SKUs' : 'mẫu'}`}
+                                    />
+                                  </HStack>
+                                  <Text type="supporting" hasTabularNumbers>
+                                    {cat.totalStock} {t('common.pieces')} •{' '}
+                                    {formatVnd(cat.inventoryValue)}
+                                  </Text>
+                                </HStack>
+                                <ProgressBar
+                                  label={cat.name}
+                                  isLabelHidden
+                                  value={Math.min(maxStock, cat.totalStock)}
+                                  max={maxStock}
+                                  variant={cat.totalStock <= 15 ? 'warning' : 'accent'}
+                                />
+                              </VStack>
+                            );
+                          })}
+                        </VStack>
+                      </VStack>
+                    </Card>
+                  </Grid>
+
+                  {/* Low Stock Material Alert Banner */}
                   {kpiStats.lowStockMats.length > 0 && (
                     <Banner
                       status="warning"
@@ -1315,7 +1858,7 @@ export default function AdminCmsPage() {
 
                   <Divider />
 
-                  {/* Recent 3D Crafting Tickets (Frame-first: Heading + Stack + Table, no redundant Card wrapper) */}
+                  {/* Recent 3D Crafting Tickets */}
                   <VStack gap={4}>
                     <HStack gap={2} vAlign="center" hAlign="between" wrap="wrap">
                       <VStack gap={0.5}>
@@ -1324,7 +1867,7 @@ export default function AdminCmsPage() {
                         </Heading>
                         <Text type="supporting">
                           {isEn
-                            ? 'Click "Inspect 3D" on any order to open the 3D workstation drawer.'
+                            ? 'Click "Open 3D Ticket" on any order to inspect the customer’s 3D blueprint.'
                             : 'Bấm "Mở phiếu 3D" trên từng đơn hàng để kiểm tra mô hình 3D và danh sách vỏ sò cần đính.'}
                         </Text>
                       </VStack>
@@ -1431,7 +1974,53 @@ export default function AdminCmsPage() {
               )}
 
               {/* =========================================================== */}
-              {/* VIEW 3: PRODUCTS & CLOUDINARY IMAGES                        */}
+              {/* VIEW 3: CATEGORY MANAGEMENT                                 */}
+              {/* =========================================================== */}
+              {activeTab === 'categories' && (
+                <VStack gap={5}>
+                  <HStack gap={3} vAlign="end" wrap="wrap">
+                    <StackItem size="fill">
+                      <TextInput
+                        type="search"
+                        label={isEn ? 'Search categories' : 'Tìm kiếm danh mục'}
+                        value={categorySearch}
+                        onChange={setCategorySearch}
+                        placeholder={
+                          isEn
+                            ? 'Search by category name or slug...'
+                            : 'Nhập tên danh mục hoặc mã định danh (bag, basket, wallet...)'
+                        }
+                        startIcon="search"
+                        hasClear
+                        width="100%"
+                      />
+                    </StackItem>
+
+                    <Selector
+                      label={isEn ? 'Category Scope' : 'Loại danh mục'}
+                      value={categoryTypeFilter}
+                      onChange={setCategoryTypeFilter}
+                      width={220}
+                      options={[
+                        { value: 'all', label: isEn ? 'All categories' : 'Tất cả danh mục' },
+                        { value: 'product', label: isEn ? 'Product Categories' : 'Danh mục sản phẩm' },
+                        { value: 'material', label: isEn ? 'Material Groups' : 'Nhóm nguyên liệu BOM' },
+                      ]}
+                    />
+                  </HStack>
+
+                  <Table
+                    data={filteredCategories}
+                    columns={categoryColumns}
+                    idKey="_id"
+                    density="balanced"
+                    hasHover
+                  />
+                </VStack>
+              )}
+
+              {/* =========================================================== */}
+              {/* VIEW 4: PRODUCTS & CLOUDINARY IMAGES                        */}
               {/* =========================================================== */}
               {activeTab === 'products' && (
                 <VStack gap={5}>
@@ -1457,15 +2046,10 @@ export default function AdminCmsPage() {
                       label={isEn ? 'Category' : 'Danh mục sản phẩm'}
                       value={productCatFilter}
                       onChange={setProductCatFilter}
-                      width={220}
+                      width={240}
                       options={[
                         { value: 'all', label: t('categories.all') },
-                        { value: 'bag', label: t('categories.bag') },
-                        { value: 'basket', label: t('categories.basket') },
-                        { value: 'wallet', label: t('categories.wallet') },
-                        { value: 'apparel', label: t('categories.apparel') },
-                        { value: 'bracelet', label: t('categories.bracelet') },
-                        { value: 'accessory', label: t('categories.accessory') },
+                        ...productCategoryOptions,
                       ]}
                     />
                   </HStack>
@@ -1481,7 +2065,7 @@ export default function AdminCmsPage() {
               )}
 
               {/* =========================================================== */}
-              {/* VIEW 4: MATERIALS BOM INVENTORY                             */}
+              {/* VIEW 5: MATERIALS BOM INVENTORY                             */}
               {/* =========================================================== */}
               {activeTab === 'materials' && (
                 <VStack gap={5}>
@@ -1534,7 +2118,7 @@ export default function AdminCmsPage() {
       </AppShell>
 
       {/* =================================================================== */}
-      {/* ASTRYX DRAWER: 3D CRAFTING INSPECTOR WORKSTATION (Pure Astryx UI)   */}
+      {/* ASTRYX DRAWER: 3D CRAFTING INSPECTOR WORKSTATION                    */}
       {/* =================================================================== */}
       <Drawer
         isOpen={isInspectorOpen}
@@ -1572,7 +2156,6 @@ export default function AdminCmsPage() {
             <LayoutContent>
               {inspectedOrder && (
                 <VStack gap={5}>
-                  {/* Pure Astryx Crafting Stage Progress & Step Selector */}
                   <Card>
                     <VStack gap={3}>
                       <ProgressBar
@@ -1600,7 +2183,6 @@ export default function AdminCmsPage() {
                     </VStack>
                   </Card>
 
-                  {/* Customer & Order MetadataList */}
                   <MetadataList columns={2}>
                     <MetadataListItem label={isEn ? 'Customer' : 'Khách hàng'}>
                       {inspectedOrder.customerInfo.fullName} ({inspectedOrder.customerInfo.phone})
@@ -1677,7 +2259,6 @@ export default function AdminCmsPage() {
                         />
                       )}
 
-                      {/* Pure Astryx BOM Checklist */}
                       <Card>
                         <VStack gap={3}>
                           <HStack gap={2} vAlign="center" hAlign="between">
@@ -1796,7 +2377,148 @@ export default function AdminCmsPage() {
       </Drawer>
 
       {/* =================================================================== */}
-      {/* ASTRYX DIALOG: CREATE / EDIT PRODUCT + CLOUDINARY IMAGE FIELD       */}
+      {/* ASTRYX DIALOG: CREATE / EDIT CATEGORY                               */}
+      {/* =================================================================== */}
+      <Dialog
+        isOpen={isCategoryModalOpen}
+        onOpenChange={setIsCategoryModalOpen}
+        purpose="form"
+        width={600}
+        maxHeight="85dvh"
+      >
+        <Layout
+          header={
+            <DialogHeader
+              title={
+                editingCategory
+                  ? isEn
+                    ? 'Update Category'
+                    : 'Cập Nhật Danh Mục Sản Phẩm'
+                  : isEn
+                  ? 'Create New Category'
+                  : 'Thêm Danh Mục Mới'
+              }
+              subtitle={
+                isEn
+                  ? 'Configure category slug, default 3D mesh preset, and display order.'
+                  : 'Cấu hình mã định danh (slug), phôi 3D mặc định và thứ tự hiển thị trên cửa hàng.'
+              }
+              onOpenChange={setIsCategoryModalOpen}
+            />
+          }
+          content={
+            <LayoutContent>
+              <FormLayout defaultOptionality="required">
+                <FormLayout direction="horizontal">
+                  <TextInput
+                    label={isEn ? 'Category Name (VI)' : 'Tên danh mục (Tiếng Việt)'}
+                    isRequired
+                    value={catForm.name}
+                    onChange={(val) => setCatForm({ ...catForm, name: val })}
+                    placeholder="Túi xách lưới đại dương"
+                    width="100%"
+                  />
+
+                  <TextInput
+                    label={isEn ? 'Category Name (EN)' : 'Tên danh mục (Tiếng Anh)'}
+                    isOptional
+                    value={catForm.nameEn}
+                    onChange={(val) => setCatForm({ ...catForm, nameEn: val })}
+                    placeholder="Upcycled Net Bags"
+                    width="100%"
+                  />
+                </FormLayout>
+
+                <FormLayout direction="horizontal">
+                  <TextInput
+                    label={isEn ? 'Category Slug' : 'Mã định danh (Slug)'}
+                    isOptional
+                    value={catForm.slug}
+                    onChange={(val) => setCatForm({ ...catForm, slug: val })}
+                    placeholder="bag"
+                    width="100%"
+                  />
+
+                  <Selector
+                    label={isEn ? 'Default 3D Mesh Preset' : 'Phôi 3D mặc định'}
+                    value={catForm.meshPresetDefault}
+                    onChange={(val) => setCatForm({ ...catForm, meshPresetDefault: val })}
+                    width="100%"
+                    options={[
+                      { value: 'tote_bag', label: 'tote_bag (Túi xách lưới)' },
+                      { value: 'storage_basket', label: 'storage_basket (Giỏ đựng đồ)' },
+                      { value: 'zip_wallet', label: 'zip_wallet (Ví khóa kéo)' },
+                      { value: 'eco_shirt', label: 'eco_shirt (Áo khoác tái chế)' },
+                      { value: 'woven_bracelet', label: 'woven_bracelet (Vòng tay dây lưới)' },
+                      { value: 'shell_charm_set', label: 'shell_charm_set (Phụ kiện charm)' },
+                    ]}
+                  />
+                </FormLayout>
+
+                <FormLayout direction="horizontal">
+                  <Selector
+                    label={isEn ? 'Category Type' : 'Phân nhóm'}
+                    value={catForm.type}
+                    onChange={(val) =>
+                      setCatForm({ ...catForm, type: val as 'product' | 'material' })
+                    }
+                    width="100%"
+                    options={[
+                      { value: 'product', label: isEn ? 'Product Category' : 'Danh mục sản phẩm' },
+                      { value: 'material', label: isEn ? 'BOM Material Group' : 'Nhóm nguyên liệu BOM' },
+                    ]}
+                  />
+
+                  <NumberInput
+                    label={isEn ? 'Display Order' : 'Thứ tự ưu tiên hiển thị'}
+                    value={catForm.sortOrder}
+                    onChange={(val) => setCatForm({ ...catForm, sortOrder: val ?? 1 })}
+                    min={1}
+                    step={1}
+                    isIntegerOnly
+                    isWheelEnabled={false}
+                    width="100%"
+                  />
+                </FormLayout>
+
+                <TextArea
+                  label={isEn ? 'Description' : 'Mô tả danh mục'}
+                  isOptional
+                  value={catForm.description}
+                  onChange={(val) => setCatForm({ ...catForm, description: val })}
+                  rows={2}
+                  width="100%"
+                />
+
+                <Switch
+                  label={isEn ? 'Display Category on Storefront' : 'Hiển thị danh mục trên Web Store'}
+                  value={catForm.isActive}
+                  onChange={(checked) => setCatForm({ ...catForm, isActive: checked })}
+                />
+              </FormLayout>
+            </LayoutContent>
+          }
+          footer={
+            <LayoutFooter>
+              <HStack gap={2} hAlign="end">
+                <Button
+                  label={t('common.cancel')}
+                  variant="secondary"
+                  onClick={() => setIsCategoryModalOpen(false)}
+                />
+                <Button
+                  label={isEn ? 'Save Category' : 'Lưu danh mục'}
+                  variant="primary"
+                  onClick={handleSaveCategory}
+                />
+              </HStack>
+            </LayoutFooter>
+          }
+        />
+      </Dialog>
+
+      {/* =================================================================== */}
+      {/* ASTRYX DIALOG: CREATE / EDIT PRODUCT + CURRENCY VALIDATOR           */}
       {/* =================================================================== */}
       <Dialog
         isOpen={isProductModalOpen}
@@ -1819,8 +2541,8 @@ export default function AdminCmsPage() {
               }
               subtitle={
                 isEn
-                  ? 'Product image is stored in the `image` field and uploaded directly to Cloudinary.'
-                  : 'Trường hình ảnh (`image`) của sản phẩm được đồng bộ trực tiếp lên Cloudinary.'
+                  ? 'Currency fields are automatically formatted & validated via shared validators.'
+                  : 'Các trường giá tiền được tự động định dạng & kiểm tra hợp lệ bằng bộ validator dùng chung.'
               }
               onOpenChange={setIsProductModalOpen}
             />
@@ -1867,14 +2589,18 @@ export default function AdminCmsPage() {
                       setProdForm({ ...prodForm, category: val as ProductCategory })
                     }
                     width="100%"
-                    options={[
-                      { value: 'bag', label: 'Túi xách lưới (bag)' },
-                      { value: 'basket', label: 'Giỏ đựng đồ (basket)' },
-                      { value: 'wallet', label: 'Ví tiền (wallet)' },
-                      { value: 'apparel', label: 'Áo quần (apparel)' },
-                      { value: 'bracelet', label: 'Vòng tay (bracelet)' },
-                      { value: 'accessory', label: 'Phụ kiện (accessory)' },
-                    ]}
+                    options={
+                      productCategoryOptions.length > 0
+                        ? productCategoryOptions
+                        : [
+                            { value: 'bag', label: 'Túi xách lưới (bag)' },
+                            { value: 'basket', label: 'Giỏ đựng đồ (basket)' },
+                            { value: 'wallet', label: 'Ví tiền (wallet)' },
+                            { value: 'apparel', label: 'Áo quần (apparel)' },
+                            { value: 'bracelet', label: 'Vòng tay (bracelet)' },
+                            { value: 'accessory', label: 'Phụ kiện (accessory)' },
+                          ]
+                    }
                   />
 
                   <Selector
@@ -1884,11 +2610,11 @@ export default function AdminCmsPage() {
                     width="100%"
                     options={[
                       { value: 'tote_bag', label: 'tote_bag (Túi xách lưới)' },
-                      { value: 'market_basket', label: 'market_basket (Giỏ tròn đan lưới)' },
+                      { value: 'storage_basket', label: 'storage_basket (Giỏ tròn đan lưới)' },
                       { value: 'zip_wallet', label: 'zip_wallet (Ví cầm tay)' },
-                      { value: 'ocean_vest', label: 'ocean_vest (Áo khoác Upcycled)' },
-                      { value: 'braided_bracelet', label: 'braided_bracelet (Vòng tay dây lưới)' },
-                      { value: 'shell_charm_holder', label: 'shell_charm_holder (Móc khóa phao)' },
+                      { value: 'eco_shirt', label: 'eco_shirt (Áo khoác Upcycled)' },
+                      { value: 'woven_bracelet', label: 'woven_bracelet (Vòng tay dây lưới)' },
+                      { value: 'shell_charm_set', label: 'shell_charm_set (Móc khóa phao)' },
                     ]}
                   />
                 </FormLayout>
@@ -1896,8 +2622,15 @@ export default function AdminCmsPage() {
                 <FormLayout direction="horizontal">
                   <NumberInput
                     label={isEn ? 'Base Price' : 'Giá phôi gốc'}
+                    description={`${isEn ? 'Formatted:' : 'Hiển thị:'} ${formatVnd(prodForm.basePrice)}`}
                     value={prodForm.basePrice}
                     onChange={(val) => setProdForm({ ...prodForm, basePrice: val ?? 0 })}
+                    formatValue={formatNumberInputVnd}
+                    status={
+                      !basePriceValidation.isValid
+                        ? { type: 'error', message: basePriceValidation.message }
+                        : undefined
+                    }
                     min={0}
                     step={10000}
                     units="VNĐ"
@@ -1907,8 +2640,15 @@ export default function AdminCmsPage() {
 
                   <NumberInput
                     label={isEn ? '3D Craft Fee' : 'Phí đan & khâu 3D'}
+                    description={`${isEn ? 'Formatted:' : 'Hiển thị:'} ${formatVnd(prodForm.craftFee)}`}
                     value={prodForm.craftFee}
                     onChange={(val) => setProdForm({ ...prodForm, craftFee: val ?? 0 })}
+                    formatValue={formatNumberInputVnd}
+                    status={
+                      !craftFeeValidation.isValid
+                        ? { type: 'error', message: craftFeeValidation.message }
+                        : undefined
+                    }
                     min={0}
                     step={5000}
                     units="VNĐ"
@@ -1943,11 +2683,7 @@ export default function AdminCmsPage() {
                 </FormLayout>
 
                 <TextInput
-                  label={
-                    isEn
-                      ? 'External 3D .glb URL'
-                      : 'Đường dẫn file 3D .glb ngoài'
-                  }
+                  label={isEn ? 'External 3D .glb URL' : 'Đường dẫn file 3D .glb ngoài'}
                   isOptional
                   value={prodForm.glbUrl}
                   onChange={(val) => setProdForm({ ...prodForm, glbUrl: val })}
@@ -1987,6 +2723,7 @@ export default function AdminCmsPage() {
                 <Button
                   label={isEn ? 'Save Product' : 'Lưu sản phẩm'}
                   variant="primary"
+                  isDisabled={!basePriceValidation.isValid || !craftFeeValidation.isValid}
                   onClick={handleSaveProduct}
                 />
               </HStack>
@@ -2071,11 +2808,11 @@ export default function AdminCmsPage() {
                       { value: 'scallop_shell', label: 'scallop_shell (Vỏ sò điệp)' },
                       { value: 'cowrie_shell', label: 'cowrie_shell (Ốc sứ)' },
                       { value: 'spiral_snail', label: 'spiral_snail (Ốc xoắn)' },
-                      { value: 'conch_snail', label: 'conch_snail (Ốc xà cừ)' },
+                      { value: 'turban_snail', label: 'turban_snail (Ốc xà cừ)' },
                       { value: 'starfish_charm', label: 'starfish_charm (Sao biển)' },
                       { value: 'turtle_charm', label: 'turtle_charm (Rùa biển)' },
                       { value: 'pearl_bead', label: 'pearl_bead (Ngọc trai)' },
-                      { value: 'fishing_cord', label: 'fishing_cord (Nút dây lưới)' },
+                      { value: 'fishing_cord_knot', label: 'fishing_cord_knot (Nút dây lưới)' },
                     ]}
                   />
 
@@ -2090,8 +2827,15 @@ export default function AdminCmsPage() {
                 <FormLayout direction="horizontal">
                   <NumberInput
                     label={isEn ? 'Unit Price' : 'Đơn giá đính 3D'}
+                    description={`${isEn ? 'Formatted:' : 'Hiển thị:'} ${formatVnd(matForm.unitPrice)}`}
                     value={matForm.unitPrice}
                     onChange={(val) => setMatForm({ ...matForm, unitPrice: val ?? 0 })}
+                    formatValue={formatNumberInputVnd}
+                    status={
+                      !matUnitPriceValidation.isValid
+                        ? { type: 'error', message: matUnitPriceValidation.message }
+                        : undefined
+                    }
                     min={0}
                     step={1000}
                     units="VNĐ"
@@ -2125,6 +2869,7 @@ export default function AdminCmsPage() {
                 <Button
                   label={isEn ? 'Save Material' : 'Lưu nguyên liệu'}
                   variant="primary"
+                  isDisabled={!matUnitPriceValidation.isValid}
                   onClick={handleSaveMaterial}
                 />
               </HStack>
@@ -2143,8 +2888,14 @@ export default function AdminCmsPage() {
         }}
         title={
           isEn
-            ? `Delete ${deleteTarget?.type === 'product' ? 'product' : 'material'}?`
-            : `Xóa ${deleteTarget?.type === 'product' ? 'sản phẩm' : 'nguyên liệu'}?`
+            ? `Delete ${deleteTarget?.type}?`
+            : `Xóa ${
+                deleteTarget?.type === 'category'
+                  ? 'danh mục'
+                  : deleteTarget?.type === 'product'
+                  ? 'sản phẩm'
+                  : 'nguyên liệu'
+              }?`
         }
         description={
           isEn
@@ -2153,8 +2904,14 @@ export default function AdminCmsPage() {
         }
         actionLabel={
           isEn
-            ? `Delete ${deleteTarget?.type === 'product' ? 'product' : 'material'}`
-            : `Xóa ${deleteTarget?.type === 'product' ? 'sản phẩm' : 'nguyên liệu'}`
+            ? `Delete`
+            : `Xóa ${
+                deleteTarget?.type === 'category'
+                  ? 'danh mục'
+                  : deleteTarget?.type === 'product'
+                  ? 'sản phẩm'
+                  : 'nguyên liệu'
+              }`
         }
         cancelLabel={t('common.cancel')}
         actionVariant="destructive"

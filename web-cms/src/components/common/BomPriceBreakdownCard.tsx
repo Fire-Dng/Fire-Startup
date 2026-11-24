@@ -2,7 +2,7 @@
 
 import React, { useMemo } from 'react';
 import { Placement3D } from '@/types';
-import { formatVnd } from '@/components/ui/PriceTag';
+import { formatVnd } from '@/lib/validators';
 import { AppIcon } from '@/components/ui/AppIcon';
 import { useI18n } from '@/i18n/I18nContext';
 import { THREE_COLORS } from '@/config/theme';

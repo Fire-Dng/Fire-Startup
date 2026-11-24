@@ -22,8 +22,9 @@ const productSchema = new mongoose.Schema(
     },
     category: {
       type: String,
-      enum: ['basket', 'bag', 'wallet', 'apparel', 'bracelet', 'accessory'],
-      required: [true, 'Danh mục sản phẩm không hợp lệ'],
+      required: [true, 'Danh mục sản phẩm không được để trống'],
+      trim: true,
+      lowercase: true,
     },
     shortDescription: {
       type: String,
@@ -106,7 +107,6 @@ const productSchema = new mongoose.Schema(
     model3D: {
       meshPreset: {
         type: String,
-        enum: ['tote_bag', 'storage_basket', 'zip_wallet', 'eco_shirt', 'woven_bracelet', 'shell_charm_set'],
         default: 'tote_bag',
       },
       glbUrl: {

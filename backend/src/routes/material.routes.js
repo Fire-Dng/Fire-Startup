@@ -10,8 +10,8 @@ const { optionalAuth, verifyToken, requireRole } = require('../middlewares/auth.
 const router = express.Router();
 
 router.get('/', getMaterials);
-router.post('/', optionalAuth, createMaterial);
-router.put('/:id', optionalAuth, updateMaterial);
-router.delete('/:id', optionalAuth, deleteMaterial);
+router.post('/', verifyToken, requireRole('admin', 'staff'), createMaterial);
+router.put('/:id', verifyToken, requireRole('admin', 'staff'), updateMaterial);
+router.delete('/:id', verifyToken, requireRole('admin', 'staff'), deleteMaterial);
 
 module.exports = router;

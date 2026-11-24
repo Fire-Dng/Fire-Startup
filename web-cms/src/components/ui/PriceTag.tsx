@@ -1,4 +1,7 @@
 import React from 'react';
+import { formatVnd } from '@/lib/validators';
+
+export { formatVnd };
 
 export interface PriceTagProps {
   amount: number;
@@ -6,10 +9,6 @@ export interface PriceTagProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
   suffix?: string;
   className?: string;
-}
-
-export function formatVnd(amount: number): string {
-  return `${Math.round(amount || 0).toLocaleString('vi-VN')}đ`;
 }
 
 export function PriceTag({

@@ -1,5 +1,6 @@
 import {
   AdminDashboardData,
+  CategoryItem,
   CustomDesignSnapshot,
   CustomMaterial,
   LandingContent,
@@ -1186,6 +1187,134 @@ export async function updateMaterialAdmin(
 export async function deleteMaterialAdmin(id: string): Promise<void> {
   const authHeaders = await getAdminAuthHeaders();
   await fetchApi(`/materials/${id}`, {
+    method: 'DELETE',
+    headers: authHeaders,
+  });
+}
+
+// ============================================================================
+// CATEGORIES CRUD API FUNCTIONS
+// ============================================================================
+
+export const FALLBACK_CATEGORIES: CategoryItem[] = [
+  {
+    _id: 'cat-bag',
+    name: 'Túi xách lưới đại dương',
+    nameEn: 'Upcycled Net Bags',
+    slug: 'bag',
+    type: 'product',
+    meshPresetDefault: 'tote_bag',
+    description: 'Túi Tote, túi đeo chéo đan thủ công từ lưới đánh cá thu hồi.',
+    sortOrder: 1,
+    isActive: true,
+    itemCount: 2,
+    totalStock: 35,
+  },
+  {
+    _id: 'cat-basket',
+    name: 'Giỏ đựng đồ đan lưới',
+    nameEn: 'Woven Storage Baskets',
+    slug: 'basket',
+    type: 'product',
+    meshPresetDefault: 'storage_basket',
+    description: 'Giỏ tròn đựng đồ gia đình và đi chợ xanh thân thiện môi trường.',
+    sortOrder: 2,
+    isActive: true,
+    itemCount: 1,
+    totalStock: 18,
+  },
+  {
+    _id: 'cat-wallet',
+    name: 'Ví cầm tay sợi lưới',
+    nameEn: 'Upcycled Net Wallets',
+    slug: 'wallet',
+    type: 'product',
+    meshPresetDefault: 'zip_wallet',
+    description: 'Ví khóa kéo nhỏ gọn dệt từ sợi lưới biển bền bỉ.',
+    sortOrder: 3,
+    isActive: true,
+    itemCount: 1,
+    totalStock: 25,
+  },
+  {
+    _id: 'cat-apparel',
+    name: 'Trang phục tái chế',
+    nameEn: 'Upcycled Apparel',
+    slug: 'apparel',
+    type: 'product',
+    meshPresetDefault: 'eco_shirt',
+    description: 'Áo khoác gile và trang phục thời trang bền vững từ sợi tái sinh.',
+    sortOrder: 4,
+    isActive: true,
+    itemCount: 1,
+    totalStock: 12,
+  },
+  {
+    _id: 'cat-bracelet',
+    name: 'Vòng tay dây lưới & Vỏ sò',
+    nameEn: 'Braided Net Bracelets',
+    slug: 'bracelet',
+    type: 'product',
+    meshPresetDefault: 'woven_bracelet',
+    description: 'Vòng tay dây lưới tết thủ công đính vỏ sò, ốc biển và ngọc trai.',
+    sortOrder: 5,
+    isActive: true,
+    itemCount: 2,
+    totalStock: 75,
+  },
+  {
+    _id: 'cat-accessory',
+    name: 'Phụ kiện & Móc khóa biển',
+    nameEn: 'Marine Charm Accessories',
+    slug: 'accessory',
+    type: 'product',
+    meshPresetDefault: 'shell_charm_set',
+    description: 'Bộ charm vỏ sò, móc khóa phao lưới và phụ kiện trang trí.',
+    sortOrder: 6,
+    isActive: true,
+    itemCount: 1,
+    totalStock: 40,
+  },
+];
+
+export async function getCategoriesAdmin(): Promise<CategoryItem[]> {
+  try {
+    const res = await fetchApi<CategoryItem[]>('/categories?includeInactive=true');
+    if (Array.isArray(res?.data) && res.data.length > 0) {
+      return res.data;
+    }
+  } catch {
+    // Fallback
+  }
+  return FALLBACK_CATEGORIES;
+}
+
+export async function createCategoryAdmin(payload: Partial<CategoryItem>): Promise<CategoryItem> {
+  const authHeaders = await getAdminAuthHeaders();
+  const res = await fetchApi<CategoryItem>('/categories', {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify(payload),
+  });
+  return res.data;
+}
+
+export async function updateCategoryAdmin(
+  id: string,
+  payload: Partial<CategoryItem>
+): Promise<CategoryItem> {
+  const authHeaders = await getAdminAuthHeaders();
+  const res = await fetchApi<CategoryItem>(`/categories/${id}`, {
+    method: 'PUT',
+    headers: authHeaders,
+    body: JSON.stringify(payload),
+  });
+  return res.data;
+}
+
+export async function deleteCategoryAdmin(id: string): Promise<void> {
+  const authHeaders = await getAdminAuthHeaders();
+  await fetchApi(`/categories/${id}`, {
     method: 'DELETE',
     headers: authHeaders,
   });
