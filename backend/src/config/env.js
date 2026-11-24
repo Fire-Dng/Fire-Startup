@@ -14,7 +14,7 @@ const env = {
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
   CORS_ORIGIN:
     process.env.CORS_ORIGIN ||
-    'http://localhost:3000,http://localhost:3002,http://127.0.0.1:3000,http://127.0.0.1:3002',
+    'http://localhost:3000,http://localhost:3002,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:3002,http://127.0.0.1:5173',
   VIETQR_BANK_ID: process.env.VIETQR_BANK_ID || 'MB',
   VIETQR_BANK_NAME: process.env.VIETQR_BANK_NAME || 'MB - Ngân hàng Quân Đội (MB Bank)',
   VIETQR_ACCOUNT_NO: process.env.VIETQR_ACCOUNT_NO || '0905123456',

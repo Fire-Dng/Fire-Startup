@@ -1,6 +1,6 @@
 # Wavo Frontend
 
-Vite + React storefront and administration interface, implemented in JSX and styled with Tailwind CSS v4 plus project CSS. The visual direction follows the home/shop references in `brand_assets/layout_home_html/wavo-shop-layout/`; Genos is used as the site font.
+Vite + React storefront and administration interface, implemented in JSX and styled with Tailwind CSS v4 plus project CSS. The visual direction follows the home/shop references in `brand_assets/layout_home_html/wavo-shop-layout/`; Be Vietnam Pro is used as the site font.
 
 ## Run locally
 

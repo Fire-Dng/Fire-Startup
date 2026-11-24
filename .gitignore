@@ -18,7 +18,9 @@
 !**/.env.example
 
 # 2. Dependencies & Package Managers
+node_modules
 node_modules/
+**/node_modules
 **/node_modules/
 .pnp
 .pnp.js

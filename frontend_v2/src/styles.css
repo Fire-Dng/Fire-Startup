@@ -7,12 +7,12 @@
   --color-mint: #2bd4c3;
   --color-sand: #e9d6b4;
   --color-foam: #f5f7f4;
-  --font-display: "Genos", sans-serif;
-  --font-body: "Genos", sans-serif;
+  --font-display: "Be Vietnam Pro", "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  --font-body: "Be Vietnam Pro", "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
 }
 
 :root {
-  font-family: "Genos", sans-serif;
+  font-family: "Be Vietnam Pro", "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
   color: #07313a;
   background: #fff;
   font-synthesis: none;
@@ -27,7 +27,7 @@
   --paper: #f5f7f4;
   --muted: #6c8589;
   --line: #dfe9e7;
-  --display: "Genos", sans-serif;
+  --display: "Be Vietnam Pro", "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -445,7 +445,7 @@ img { display: block; max-width: 100%; }
 .story-mission h2 { margin: 14px 0; font-family: var(--display); font-size: clamp(33px, 4vw, 50px); font-weight: 500; letter-spacing: -.05em; line-height: 1.02; }
 .story-mission > div:last-child > p { color: #6d8386; font-size: 13px; line-height: 1.8; }
 .story-quote { margin-top: 26px; padding: 19px 21px; border-left: 2px solid var(--mint-dark); background: #f5f8f5; }
-.story-quote > span { color: var(--mint-dark); font-family: Georgia, serif; font-size: 38px; line-height: .6; }
+.story-quote > span { color: var(--mint-dark); font-family: var(--display); font-size: 38px; line-height: .6; }
 .story-quote blockquote { margin: 7px 0 11px; color: #365d62; font-family: var(--display); font-size: 15px; font-style: italic; line-height: 1.5; }
 .story-quote small { color: #84999a; font-size: 9px; }
 .story-process { padding-top: 20px; }

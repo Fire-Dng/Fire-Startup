@@ -100,9 +100,9 @@ export default function HomePage() {
             {index % 2 === 0 && <p>{product.name}</p>}
             {index % 2 === 0 && <Swatches colors={swatches[index]} />}
           </>;
-          return <LocalizedContent><li className={'real' + (index % 2 ? ' real--dots-top' : '')} key={product._id || product.slug || index}>
+          return <li className={'real' + (index % 2 ? ' real--dots-top' : '')} key={product._id || product.slug || index}>
             <Link className="real-product-link" to="/shop">{content}</Link>
-          </li></LocalizedContent>;
+          </li>;
         })}
       </ul>
     </section>

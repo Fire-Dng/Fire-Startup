@@ -1,6 +1,6 @@
 /* WAVO x EcoGreen — shared styles. Design scale: 1400px frame, 1rem = 16px at 1400px wide */
 :root{--navy:#072935;--ink:#1a495a;--mist:#86b1b7;--grey:#d9d9d9;--star:#fc0;--text:#04212f;
---display:'Lexend Exa','Lexend',system-ui,sans-serif;--body:'Inter',system-ui,sans-serif}
+--display:'Be Vietnam Pro','Plus Jakarta Sans','Inter',system-ui,sans-serif;--body:'Be Vietnam Pro','Plus Jakarta Sans','Inter',system-ui,sans-serif}
 *{box-sizing:border-box}
 html{font-size:clamp(10px,1.143vw,16px)}
 body{margin:0;position:relative;font-family:var(--body);color:var(--text);background:#fff}

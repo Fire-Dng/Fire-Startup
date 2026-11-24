@@ -1,18 +1,20 @@
 import type { Metadata } from 'next';
-import { Cormorant_Garamond, Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google';
+import { Be_Vietnam_Pro, Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import { CartProvider } from '@/context/CartContext';
 import { I18nProvider } from '@/i18n/I18nContext';
 
-const plusJakarta = Plus_Jakarta_Sans({
+const beVietnamPro = Be_Vietnam_Pro({
   subsets: ['latin', 'vietnamese'],
+  weight: ['400', '500', '600', '700'],
+  style: ['normal', 'italic'],
   variable: '--font-sans',
   display: 'swap',
 });
 
-const cormorant = Cormorant_Garamond({
+const plusJakarta = Plus_Jakarta_Sans({
   subsets: ['latin', 'vietnamese'],
-  weight: ['500', '600', '700'],
+  weight: ['500', '600', '700', '800'],
   style: ['normal', 'italic'],
   variable: '--font-serif',
   display: 'swap',
@@ -39,7 +41,7 @@ export default function CmsRootLayout({
   return (
     <html
       lang="vi"
-      className={`${plusJakarta.variable} ${cormorant.variable} ${jetbrainsMono.variable}`}
+      className={`${beVietnamPro.variable} ${plusJakarta.variable} ${jetbrainsMono.variable}`}
     >
       <body className="min-h-screen flex flex-col bg-coastal-bg text-coastal-ink antialiased selection:bg-coastal-kelp selection:text-coastal-card">
         <I18nProvider>

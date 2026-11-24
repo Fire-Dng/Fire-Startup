@@ -4,7 +4,7 @@
 # DTU Upcycled Fishing Net & 3D Ocean Craft Ecosystem — Quick Start Script
 # Hệ sinh thái 2 Web Độc lập + Backend API:
 #   - Backend API Server           : http://localhost:5000  (backend/)
-#   - Web Store & 3D Studio        : http://localhost:3000  (frontend/ | web-store/)
+#   - Web Store & 3D Studio (Wavo) : http://localhost:3000  (frontend_v2/ | web-store/)
 #   - Web CMS & 3D Inspector       : http://localhost:3002  (web-cms/)
 # ==============================================================================
 
@@ -12,7 +12,7 @@ set -e
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="${ROOT_DIR}/backend"
-FRONTEND_DIR="${ROOT_DIR}/frontend"
+FRONTEND_V2_DIR="${ROOT_DIR}/frontend_v2"
 WEB_STORE_DIR="${ROOT_DIR}/web-store"
 WEB_CMS_DIR="${ROOT_DIR}/web-cms"
 
@@ -47,7 +47,7 @@ cleanup() {
 print_banner() {
   echo -e "${TEAL}================================================================================${NC}"
   echo -e "${BOLD}🌊 DTU UPCYCLED FISHING NET & 3D OCEAN CRAFT ECOSYSTEM${NC}"
-  echo -e "   Kiến trúc 2 Web Độc Lập (Web Store:3000 • Web CMS:3002) + Backend API:5000"
+  echo -e "   Kiến trúc 2 Web Độc Lập (Web Store:${STORE_PORT} • Web CMS:${CMS_PORT}) + Backend API:${BACKEND_PORT}"
   echo -e "${TEAL}================================================================================${NC}"
 }
 
@@ -73,7 +73,7 @@ BACKEND_PUBLIC_URL=http://localhost:${BACKEND_PORT}
 MONGODB_URI=mongodb://127.0.0.1:27017/dtu_upcycled_3d
 JWT_SECRET=dtu-ocean-upcycled-3d-super-secret-jwt-key-2026
 JWT_EXPIRES_IN=7d
-CORS_ORIGIN=http://localhost:${STORE_PORT},http://localhost:${CMS_PORT},http://127.0.0.1:${STORE_PORT},http://127.0.0.1:${CMS_PORT}
+CORS_ORIGIN=http://localhost:${STORE_PORT},http://localhost:${CMS_PORT},http://localhost:5173,http://127.0.0.1:${STORE_PORT},http://127.0.0.1:${CMS_PORT},http://127.0.0.1:5173
 VIETQR_BANK_ID=MB
 VIETQR_BANK_NAME=MB - Ngân hàng Quân Đội (MB Bank)
 VIETQR_ACCOUNT_NO=0905123456
@@ -87,8 +87,14 @@ SEED_DEFAULT_PASSWORD=Password123!
 EOF
   fi
 
-  local env_content
-  env_content=$(cat <<EOF
+  if [[ -d "${FRONTEND_V2_DIR}" ]] && [[ ! -f "${FRONTEND_V2_DIR}/.env.local" ]]; then
+    cat <<EOF > "${FRONTEND_V2_DIR}/.env.local"
+VITE_API_BASE_URL=http://localhost:${BACKEND_PORT}/api
+EOF
+  fi
+
+  local cms_env_content
+  cms_env_content=$(cat <<EOF
 NEXT_PUBLIC_API_URL=http://localhost:${BACKEND_PORT}/api
 NEXT_PUBLIC_STORE_URL=http://localhost:${STORE_PORT}
 NEXT_PUBLIC_CMS_URL=http://localhost:${CMS_PORT}
@@ -96,31 +102,16 @@ NEXT_PUBLIC_S3_BASE_URL=https://dtu-img-db-868017909899-ap-southeast-2-an.s3.ap-
 EOF
 )
 
-  if [[ ! -f "${FRONTEND_DIR}/.env.local" ]]; then
-    echo "${env_content}" > "${FRONTEND_DIR}/.env.local"
-  fi
   if [[ -d "${WEB_CMS_DIR}" ]] && [[ ! -f "${WEB_CMS_DIR}/.env.local" ]]; then
-    echo "${env_content}" > "${WEB_CMS_DIR}/.env.local"
+    echo "${cms_env_content}" > "${WEB_CMS_DIR}/.env.local"
   fi
 }
 
 ensure_symlinks() {
-  # Đảm bảo symlink web-store -> frontend
-  if [[ ! -e "${WEB_STORE_DIR}" ]]; then
-    ln -s "frontend" "${WEB_STORE_DIR}"
-  fi
-
-  # Đảm bảo các symlink dùng chung cho web-cms (Zero-Duplication Architecture)
-  if [[ -d "${WEB_CMS_DIR}" ]]; then
-    if [[ ! -e "${WEB_CMS_DIR}/node_modules" ]] && [[ -d "${FRONTEND_DIR}/node_modules" ]]; then
-      ln -s "../frontend/node_modules" "${WEB_CMS_DIR}/node_modules"
-    fi
-    mkdir -p "${WEB_CMS_DIR}/src"
-    for shared_folder in components lib types context config i18n; do
-      if [[ ! -e "${WEB_CMS_DIR}/src/${shared_folder}" ]] && [[ -d "${FRONTEND_DIR}/src/${shared_folder}" ]]; then
-        ln -s "../../frontend/src/${shared_folder}" "${WEB_CMS_DIR}/src/${shared_folder}"
-      fi
-    done
+  # Đảm bảo symlink web-store -> frontend_v2
+  if [[ -L "${WEB_STORE_DIR}" ]] || [[ ! -e "${WEB_STORE_DIR}" ]]; then
+    rm -f "${WEB_STORE_DIR}"
+    ln -s "frontend_v2" "${WEB_STORE_DIR}"
   fi
 }
 
@@ -134,11 +125,25 @@ ensure_dependencies() {
     echo -e "${GREEN}✔ Backend node_modules đã sẵn sàng.${NC}"
   fi
 
-  if [[ "${force_install}" == "true" ]] || [[ ! -d "${FRONTEND_DIR}/node_modules" ]]; then
-    echo -e "${CYAN}📦 Đang cài đặt dependencies cho Frontend Shared Core (${FRONTEND_DIR})...${NC}"
-    (cd "${FRONTEND_DIR}" && npm install)
-  else
-    echo -e "${GREEN}✔ Frontend node_modules đã sẵn sàng.${NC}"
+  if [[ -d "${FRONTEND_V2_DIR}" ]]; then
+    if [[ "${force_install}" == "true" ]] || [[ ! -d "${FRONTEND_V2_DIR}/node_modules" ]]; then
+      echo -e "${CYAN}📦 Đang cài đặt dependencies cho Web Store (${FRONTEND_V2_DIR})...${NC}"
+      (cd "${FRONTEND_V2_DIR}" && npm install)
+    else
+      echo -e "${GREEN}✔ Web Store (frontend_v2) node_modules đã sẵn sàng.${NC}"
+    fi
+  fi
+
+  if [[ -d "${WEB_CMS_DIR}" ]]; then
+    if [[ -L "${WEB_CMS_DIR}/node_modules" ]] && [[ ! -e "${WEB_CMS_DIR}/node_modules" ]]; then
+      rm -f "${WEB_CMS_DIR}/node_modules"
+    fi
+    if [[ "${force_install}" == "true" ]] || [[ ! -d "${WEB_CMS_DIR}/node_modules" ]]; then
+      echo -e "${CYAN}📦 Đang cài đặt dependencies cho Web CMS (${WEB_CMS_DIR})...${NC}"
+      (cd "${WEB_CMS_DIR}" && npm install)
+    else
+      echo -e "${GREEN}✔ Web CMS node_modules đã sẵn sàng.${NC}"
+    fi
   fi
 
   ensure_symlinks
@@ -174,7 +179,7 @@ Các tùy chọn:
                       3. Web CMS & 3D Inspector       (http://localhost:${CMS_PORT})
   --seed            Nạp mới lại toàn bộ dữ liệu mẫu (8 sản phẩm gốc, 12 nguyên liệu vỏ sò/ốc, đơn mẫu 3D)
   --test            Chạy bộ kiểm thử tự động Backend API (Gherkin) và kiểm tra build cả 2 ứng dụng Web
-  --install         Buộc cài đặt lại node_modules và đồng bộ symlinks cho toàn bộ hệ thống
+  --install         Buộc cài đặt lại node_modules cho toàn bộ hệ thống
   --help, -h        Hiển thị hướng dẫn sử dụng này
 EOF
 }
@@ -187,8 +192,8 @@ print_access_guide() {
   echo -e "${BOLD}📌 1. Hai Ứng Dụng Web Độc Lập:${NC}"
   echo -e "   • ${CYAN}[Port ${STORE_PORT}] Web Store & 3D Customizer Studio:${NC} http://localhost:${STORE_PORT}"
   echo -e "     ├─ Cửa hàng sản phẩm tái chế : http://localhost:${STORE_PORT}/shop"
-  echo -e "     ├─ Phòng 3D Studio (2 Mode)  : http://localhost:${STORE_PORT}/customizer"
-  echo -e "     └─ Tra cứu tiến độ đơn hàng  : http://localhost:${STORE_PORT}/orders"
+  echo -e "     ├─ Phòng 3D Studio           : http://localhost:${STORE_PORT}/design"
+  echo -e "     └─ Tra cứu tiến độ đơn hàng  : http://localhost:${STORE_PORT}/order-lookup"
   echo -e "   • ${CYAN}[Port ${CMS_PORT}] Web CMS & Xưởng Chế Tác 3D:${NC}      http://localhost:${CMS_PORT}"
   echo ""
   echo -e "${BOLD}📌 2. Đường dẫn Server API (Backend Node.js + Express + MongoDB):${NC}"
@@ -222,7 +227,7 @@ case "${MODE}" in
     check_prerequisites
     ensure_env_files
     ensure_dependencies "true"
-    echo -e "${GREEN}✔ Đã cài đặt hoàn tất toàn bộ dependencies & symlinks!${NC}"
+    echo -e "${GREEN}✔ Đã cài đặt hoàn tất toàn bộ dependencies!${NC}"
     exit 0
     ;;
   --seed)
@@ -242,8 +247,10 @@ case "${MODE}" in
     ensure_dependencies "false"
     echo -e "${CYAN}🧪 1/3: Chạy bộ kiểm thử tự động Backend API & Business Rules...${NC}"
     (cd "${BACKEND_DIR}" && npm test && npm run seed)
-    echo -e "${CYAN}🏗 2/3: Kiểm tra Production Build của Web Store & 3D Studio (${FRONTEND_DIR})...${NC}"
-    (cd "${FRONTEND_DIR}" && npm run build)
+    if [[ -d "${FRONTEND_V2_DIR}" ]]; then
+      echo -e "${CYAN}🏗 2/3: Kiểm tra Production Build của Web Store (${FRONTEND_V2_DIR})...${NC}"
+      (cd "${FRONTEND_V2_DIR}" && npm run build)
+    fi
     if [[ -d "${WEB_CMS_DIR}" ]]; then
       echo -e "${CYAN}🏗 3/3: Kiểm tra Production Build của Web CMS (${WEB_CMS_DIR})...${NC}"
       (cd "${WEB_CMS_DIR}" && npm run build)
@@ -276,9 +283,11 @@ case "${MODE}" in
       sleep 1
     done
 
-    echo -e "${CYAN}🚀 [2/3] Đang khởi động Web Store & 3D Studio tại cổng ${STORE_PORT}...${NC}"
-    (cd "${FRONTEND_DIR}" && npx next dev -p "${STORE_PORT}") &
-    STORE_PID=$!
+    if [[ -d "${FRONTEND_V2_DIR}" ]]; then
+      echo -e "${CYAN}🚀 [2/3] Đang khởi động Web Store & 3D Studio tại cổng ${STORE_PORT}...${NC}"
+      (cd "${FRONTEND_V2_DIR}" && npx vite --port "${STORE_PORT}" --host 0.0.0.0) &
+      STORE_PID=$!
+    fi
 
     if [[ -d "${WEB_CMS_DIR}" ]]; then
       echo -e "${CYAN}🚀 [3/3] Đang khởi động Web CMS & Xưởng 3D tại cổng ${CMS_PORT}...${NC}"
