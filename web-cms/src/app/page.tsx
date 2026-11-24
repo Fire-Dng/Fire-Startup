@@ -260,6 +260,86 @@ const NEXT_ORDER_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
   shipping: 'delivered',
 };
 
+function AnimatedCounter({
+  value,
+  formatter,
+  duration = 720,
+}: {
+  value: number;
+  formatter: (val: number) => string;
+  duration?: number;
+}) {
+  const [displayVal, setDisplayVal] = useState(0);
+
+  useEffect(() => {
+    let rafId = 0;
+    const startVal = 0;
+    const endVal = Number(value) || 0;
+    const startTime = performance.now();
+
+    const step = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(1, elapsed / duration);
+      // Cubic ease-out
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const current = startVal + (endVal - startVal) * eased;
+      setDisplayVal(current);
+      if (progress < 1) {
+        rafId = requestAnimationFrame(step);
+      } else {
+        setDisplayVal(endVal);
+      }
+    };
+
+    rafId = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(rafId);
+  }, [value, duration]);
+
+  return <>{formatter(displayVal)}</>;
+}
+
+function MiniSparkline({
+  points,
+  color = 'var(--color-accent)',
+}: {
+  points: number[];
+  color?: string;
+}) {
+  const width = 120;
+  const height = 34;
+  const min = Math.min(...points);
+  const max = Math.max(...points, min + 1);
+  const coords = points.map((pt, i) => {
+    const x = (i / Math.max(1, points.length - 1)) * (width - 8) + 4;
+    const y = height - 5 - ((pt - min) / (max - min)) * (height - 10);
+    return { x, y };
+  });
+  const linePath = coords.map((c, i) => `${i === 0 ? 'M' : 'L'} ${c.x.toFixed(1)} ${c.y.toFixed(1)}`).join(' ');
+  const areaPath = `${linePath} L ${coords[coords.length - 1].x.toFixed(1)} ${height} L ${coords[0].x.toFixed(1)} ${height} Z`;
+  const last = coords[coords.length - 1];
+
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      style={{ overflow: 'visible', flexShrink: 0 }}
+      aria-hidden="true"
+    >
+      <path d={areaPath} fill={color} fillOpacity={0.12} />
+      <path
+        d={linePath}
+        fill="none"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {last && <circle cx={last.x} cy={last.y} r={3.2} fill={color} />}
+    </svg>
+  );
+}
+
 export default function AdminCmsPage() {
   const { t, locale, setLocale } = useI18n();
   const isEn = locale === 'en';
@@ -268,6 +348,8 @@ export default function AdminCmsPage() {
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light');
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
   const [isSideNavCollapsed, setIsSideNavCollapsed] = useState(false);
+  const [chartWindow, setChartWindow] = useState<'6m' | 'q4'>('6m');
+  const [hoveredMonth, setHoveredMonth] = useState<string | null>('T11');
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   // Data States
@@ -431,8 +513,8 @@ export default function AdminCmsPage() {
         const computedStock =
           c.type === 'material'
             ? materials
-                .filter((m) => m.materialType === c.slug)
-                .reduce((s, m) => s + m.stockQuantity, 0)
+              .filter((m) => m.materialType === c.slug)
+              .reduce((s, m) => s + m.stockQuantity, 0)
             : products.filter((p) => p.category === c.slug).reduce((s, p) => s + p.stock, 0);
         return {
           ...c,
@@ -859,8 +941,8 @@ export default function AdminCmsPage() {
                   ? `${charmCount} attached shells`
                   : `Đính ${charmCount} vỏ sò / charm`
                 : isEn
-                ? 'Custom color / size'
-                : 'Tùy chỉnh màu dây'}
+                  ? 'Custom color / size'
+                  : 'Tùy chỉnh màu dây'}
             </Text>
           </VStack>
         ) : (
@@ -889,8 +971,8 @@ export default function AdminCmsPage() {
                   ? 'Paid (VietQR)'
                   : 'Đã thanh toán'
                 : isEn
-                ? 'Unpaid (COD)'
-                : 'Chưa thu tiền'}
+                  ? 'Unpaid (COD)'
+                  : 'Chưa thu tiền'}
             </Text>
           </HStack>
         </VStack>
@@ -1243,8 +1325,8 @@ export default function AdminCmsPage() {
               row.stockQuantity <= 0
                 ? 'error'
                 : row.stockQuantity <= 15
-                ? 'warning'
-                : 'success'
+                  ? 'warning'
+                  : 'success'
             }
             label={row.stockQuantity <= 15 ? 'Low stock' : 'In stock'}
           />
@@ -1417,7 +1499,7 @@ export default function AdminCmsPage() {
                 onClick={() => setActiveTab('categories')}
               />
               <SideNavItem
-                label={isEn ? 'Products & Images' : 'Sản phẩm & Hình ảnh'}
+                label={isEn ? 'Products' : 'Sản phẩm'}
                 icon="viewColumns"
                 isSelected={activeTab === 'products'}
                 endContent={<Badge variant="neutral" label={String(products.length)} />}
@@ -1579,223 +1661,349 @@ export default function AdminCmsPage() {
           content={
             <LayoutContent>
               {/* =========================================================== */}
-              {/* VIEW 1: DASHBOARD WITH ANALYTICS CHARTS                     */}
+              {/* VIEW 1: DASHBOARD WITH ANIMATED KPIs & INTERACTIVE CHARTS   */}
               {/* =========================================================== */}
               {activeTab === 'dashboard' && (
                 <VStack gap={6}>
-                  {/* 4 Responsive Metric Cards */}
+                  {/* 4 Responsive Metric Cards with Animated Counters & Sparklines */}
                   <Grid columns={{ minWidth: 220, repeat: 'fit' }} gap={4}>
-                    <Card>
-                      <VStack gap={1.5}>
-                        <Text type="supporting">
-                          {isEn ? 'Total Workshop Revenue' : 'Tổng doanh thu đơn hiện tại'}
-                        </Text>
-                        <Heading level={2}>{formatVnd(kpiStats.revenue)}</Heading>
-                        <Text type="supporting">
-                          {isEn
-                            ? `Cumulative Q4: ${formatCompactVnd(18268000, locale)}`
-                            : `Lũy kế quý IV: ${formatVnd(18268000)}`}
-                        </Text>
-                      </VStack>
-                    </Card>
-
-                    <Card>
-                      <VStack gap={1.5}>
-                        <Text type="supporting">
-                          {isEn ? 'Total Orders' : 'Tổng đơn đặt hàng'}
-                        </Text>
-                        <Heading level={2}>
-                          {kpiStats.totalOrders} {isEn ? 'orders' : 'đơn hàng'}
-                        </Heading>
-                        <Text type="supporting">
-                          {isEn ? 'Synced VietQR & COD' : 'Đồng bộ thanh toán VietQR & COD'}
-                        </Text>
-                      </VStack>
-                    </Card>
-
-                    <Card>
-                      <VStack gap={1.5}>
-                        <Text type="supporting">
-                          {isEn ? 'Active 3D Crafting Tickets' : 'Phiếu đang chế tác 3D'}
-                        </Text>
-                        <Heading level={2}>
-                          {kpiStats.craftingCount} {isEn ? 'tickets' : 'phiếu 3D'}
-                        </Heading>
-                        <Text type="supporting">
-                          {isEn ? 'In progress on 3D workstation' : 'Đang đan & đính ốc tại xưởng'}
-                        </Text>
-                      </VStack>
-                    </Card>
-
-                    <Card>
-                      <VStack gap={1.5}>
-                        <Text type="supporting">
-                          {isEn ? 'Ghost Nets Recovered' : 'Lưới đánh cá thu hồi'}
-                        </Text>
-                        <Heading level={2}>{(kpiStats.totalNetsGrams / 1000).toFixed(2)} kg</Heading>
-                        <Text type="supporting" hasTabularNumbers>
-                          {kpiStats.totalNetsGrams.toLocaleString(isEn ? 'en-US' : 'vi-VN')} gram lưới biển tái sinh
-                        </Text>
-                      </VStack>
-                    </Card>
-                  </Grid>
-
-                  {/* ANALYTICS CHARTS BAND (2 Visual Charts side by side) */}
-                  <Grid columns={{ minWidth: 360, repeat: 'fit' }} gap={4}>
-                    {/* Chart 1: 6-Month Revenue & Ghost Net Recovery Bar Chart */}
-                    <Card>
-                      <VStack gap={4}>
-                        <HStack gap={2} vAlign="center" hAlign="between" wrap="wrap">
-                          <VStack gap={0.5}>
-                            <Heading level={3}>
-                              {isEn
-                                ? 'Workshop Revenue & Net Recovery (6 Months)'
-                                : 'Biểu Đồ Doanh Thu & Sản Lượng Lưới Thu Hồi (6 Tháng)'}
+                    <div className="cms-anim-enter cms-anim-delay-1 cms-kpi-lift">
+                      <Card>
+                        <VStack gap={2}>
+                          <HStack gap={2} vAlign="center" hAlign="between">
+                            <Text type="supporting">
+                              {isEn ? 'Total Workshop Revenue' : 'Tổng doanh thu đơn hiện tại'}
+                            </Text>
+                            <Badge variant="green" label="+18.4%" />
+                          </HStack>
+                          <HStack gap={2} vAlign="end" hAlign="between">
+                            <Heading level={2}>
+                              <AnimatedCounter
+                                value={kpiStats.revenue}
+                                formatter={(v) => formatVnd(Math.round(v))}
+                              />
                             </Heading>
-                            <Text type="supporting">
-                              {isEn
-                                ? 'Monthly revenue (VND) alongside ocean net weight recovered (kg)'
-                                : 'Tăng trưởng doanh thu chế tác 3D (VNĐ) song hành cùng khối lượng lưới thu hồi (kg)'}
-                            </Text>
-                          </VStack>
-                          <Badge
-                            variant="green"
-                            label={isEn ? '+18.4% vs last month' : '+18,4% so với tháng trước'}
-                          />
-                        </HStack>
+                            <MiniSparkline points={[280, 340, 310, 420, 490, 560, 768]} />
+                          </HStack>
+                          <Text type="supporting">
+                            {isEn
+                              ? `Cumulative Q4: ${formatCompactVnd(18268000, locale)}`
+                              : `Lũy kế quý IV: ${formatVnd(18268000)}`}
+                          </Text>
+                        </VStack>
+                      </Card>
+                    </div>
 
-                        {/* Responsive SVG Column Chart */}
-                        <div
-                          style={{
-                            width: '100%',
-                            height: 220,
-                            display: 'flex',
-                            alignItems: 'flex-end',
-                            justifyContent: 'space-between',
-                            gap: 16,
-                            paddingTop: 24,
-                            paddingBottom: 8,
-                            borderBottom: '1px solid var(--color-border)',
-                          }}
-                        >
-                          {kpiStats.monthlyTrend.map((point) => {
-                            const maxRev = 20_000_000;
-                            const heightPct = Math.max(18, Math.min(100, Math.round((point.revenue / maxRev) * 100)));
-                            return (
-                              <div
-                                key={point.month}
-                                style={{
-                                  flex: 1,
-                                  height: '100%',
-                                  display: 'flex',
-                                  flexDirection: 'column',
-                                  alignItems: 'center',
-                                  justifyContent: 'flex-end',
-                                  gap: 6,
-                                }}
-                              >
-                                <Text type="supporting" hasTabularNumbers>
-                                  {formatCompactVnd(point.revenue, locale)}
-                                </Text>
-                                <div
-                                  title={`${point.month}: ${formatVnd(point.revenue)} • ${point.netsKg}kg`}
-                                  style={{
-                                    width: '100%',
-                                    maxWidth: 44,
-                                    height: `${heightPct}%`,
-                                    borderRadius: '6px 6px 2px 2px',
-                                    background:
-                                      point.month === 'T11'
-                                        ? 'var(--color-accent)'
-                                        : 'var(--color-border-emphasized, rgba(120,120,128,0.32))',
-                                    transition: 'height 300ms ease',
-                                  }}
-                                />
-                                <Text type="label" hasTabularNumbers>
-                                  {point.month}
-                                </Text>
-                                <Text type="supporting" hasTabularNumbers>
-                                  {point.netsKg}kg
-                                </Text>
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        <HStack gap={4} vAlign="center" hAlign="between" wrap="wrap">
-                          <HStack gap={2} vAlign="center">
-                            <StatusDot variant="accent" label="Current Month" />
+                    <div className="cms-anim-enter cms-anim-delay-2 cms-kpi-lift">
+                      <Card>
+                        <VStack gap={2}>
+                          <HStack gap={2} vAlign="center" hAlign="between">
                             <Text type="supporting">
-                              {isEn ? 'Current month (T11)' : 'Tháng hiện tại (T11)'}
+                              {isEn ? 'Total Orders' : 'Tổng đơn đặt hàng'}
                             </Text>
+                            <StatusDot variant="success" isPulsing label="Live Orders" />
+                          </HStack>
+                          <HStack gap={2} vAlign="end" hAlign="between">
+                            <Heading level={2}>
+                              <AnimatedCounter
+                                value={kpiStats.totalOrders}
+                                formatter={(v) =>
+                                  `${Math.round(v)} ${isEn ? 'orders' : 'đơn hàng'}`
+                                }
+                              />
+                            </Heading>
+                            <MiniSparkline points={[12, 16, 15, 22, 28, 35, 42]} />
+                          </HStack>
+                          <Text type="supporting">
+                            {isEn ? 'Synced VietQR & COD' : 'Đồng bộ thanh toán VietQR & COD'}
+                          </Text>
+                        </VStack>
+                      </Card>
+                    </div>
+
+                    <div className="cms-anim-enter cms-anim-delay-3 cms-kpi-lift">
+                      <Card>
+                        <VStack gap={2}>
+                          <HStack gap={2} vAlign="center" hAlign="between">
+                            <Text type="supporting">
+                              {isEn ? 'Active 3D Crafting Tickets' : 'Phiếu đang chế tác 3D'}
+                            </Text>
+                            <StatusDot variant="accent" isPulsing label="3D Workstation Active" />
+                          </HStack>
+                          <HStack gap={2} vAlign="end" hAlign="between">
+                            <Heading level={2}>
+                              <AnimatedCounter
+                                value={kpiStats.craftingCount}
+                                formatter={(v) =>
+                                  `${Math.round(v)} ${isEn ? 'tickets' : 'phiếu 3D'}`
+                                }
+                              />
+                            </Heading>
+                            <MiniSparkline points={[3, 5, 4, 7, 6, 8, 9]} />
+                          </HStack>
+                          <Text type="supporting">
+                            {isEn ? 'In progress on 3D workstation' : 'Đang đan & đính ốc tại xưởng'}
+                          </Text>
+                        </VStack>
+                      </Card>
+                    </div>
+
+                    <div className="cms-anim-enter cms-anim-delay-4 cms-kpi-lift">
+                      <Card>
+                        <VStack gap={2}>
+                          <HStack gap={2} vAlign="center" hAlign="between">
+                            <Text type="supporting">
+                              {isEn ? 'Ghost Nets Recovered' : 'Lưới đánh cá thu hồi'}
+                            </Text>
+                            <Badge variant="teal" label="Eco Impact" />
+                          </HStack>
+                          <HStack gap={2} vAlign="end" hAlign="between">
+                            <Heading level={2}>
+                              <AnimatedCounter
+                                value={kpiStats.totalNetsGrams / 1000}
+                                formatter={(v) => `${v.toFixed(2)} kg`}
+                              />
+                            </Heading>
+                            <MiniSparkline points={[9.5, 11.2, 12.8, 14.1, 15.3, 16.4, 17.16]} />
                           </HStack>
                           <Text type="supporting" hasTabularNumbers>
-                            {isEn ? 'Average ticket value:' : 'Giá trị đơn trung bình:'}{' '}
-                            {formatVnd(
-                              kpiStats.totalOrders > 0
-                                ? Math.round(kpiStats.revenue / kpiStats.totalOrders)
-                                : 384000
-                            )}
+                            {kpiStats.totalNetsGrams.toLocaleString(isEn ? 'en-US' : 'vi-VN')} gram lưới biển tái sinh
                           </Text>
-                        </HStack>
-                      </VStack>
-                    </Card>
-
-                    {/* Chart 2: Category Distribution & Inventory Value Progress Chart */}
-                    <Card>
-                      <VStack gap={4}>
-                        <HStack gap={2} vAlign="center" hAlign="between" wrap="wrap">
-                          <VStack gap={0.5}>
-                            <Heading level={3}>
-                              {isEn
-                                ? 'Category Stock & Inventory Value Distribution'
-                                : 'Tỷ Trọng Tồn Kho & Giá Trị Theo Danh Mục'}
-                            </Heading>
-                            <Text type="supporting">
-                              {isEn
-                                ? 'Live distribution across product categories'
-                                : 'Phân bổ số lượng phôi và giá trị hàng tồn theo từng nhóm danh mục'}
-                            </Text>
-                          </VStack>
-                          <Button
-                            label={isEn ? 'Manage Categories' : 'Quản lý danh mục'}
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => setActiveTab('categories')}
-                          />
-                        </HStack>
-
-                        <VStack gap={3}>
-                          {kpiStats.categoryBreakdown.map((cat) => {
-                            const maxStock = 100;
-                            return (
-                              <VStack key={cat.slug} gap={1}>
-                                <HStack gap={2} vAlign="center" hAlign="between">
-                                  <HStack gap={1.5} vAlign="center">
-                                    <Text weight="medium">{cat.name}</Text>
-                                    <Badge
-                                      variant="neutral"
-                                      label={`${cat.productCount} ${isEn ? 'SKUs' : 'mẫu'}`}
-                                    />
-                                  </HStack>
-                                  <Text type="supporting" hasTabularNumbers>
-                                    {cat.totalStock} {t('common.pieces')} •{' '}
-                                    {formatVnd(cat.inventoryValue)}
-                                  </Text>
-                                </HStack>
-                                <ProgressBar
-                                  label={cat.name}
-                                  isLabelHidden
-                                  value={Math.min(maxStock, cat.totalStock)}
-                                  max={maxStock}
-                                  variant={cat.totalStock <= 15 ? 'warning' : 'accent'}
-                                />
-                              </VStack>
-                            );
-                          })}
                         </VStack>
-                      </VStack>
-                    </Card>
+                      </Card>
+                    </div>
+                  </Grid>
+
+                  {/* ANALYTICS CHARTS BAND (2 Interactive Visual Charts side by side) */}
+                  <Grid columns={{ minWidth: 380, repeat: 'fit' }} gap={4}>
+                    {/* Chart 1: Interactive 6-Month Revenue & Ghost Net Recovery Chart */}
+                    <div className="cms-anim-enter cms-anim-delay-2">
+                      <Card>
+                        <VStack gap={4}>
+                          <HStack gap={2} vAlign="center" hAlign="between" wrap="wrap">
+                            <VStack gap={0.5}>
+                              <Heading level={3}>
+                                {isEn
+                                  ? 'Workshop Revenue & Net Recovery'
+                                  : 'Biểu Đồ Doanh Thu & Sản Lượng Lưới Thu Hồi'}
+                              </Heading>
+                              <Text type="supporting">
+                                {isEn
+                                  ? 'Hover any month column to inspect detailed revenue & ocean net weight'
+                                  : 'Di chuột vào từng cột tháng để xem chi tiết doanh thu & lượng lưới tái chế'}
+                              </Text>
+                            </VStack>
+                            <SegmentedControl
+                              size="sm"
+                              label={isEn ? 'Time range' : 'Khoảng thời gian'}
+                              value={chartWindow}
+                              onChange={(val) => setChartWindow(val as '6m' | 'q4')}
+                            >
+                              <SegmentedControlItem
+                                value="6m"
+                                label={isEn ? '6 Months' : '6 Tháng'}
+                              />
+                              <SegmentedControlItem
+                                value="q4"
+                                label={isEn ? 'Quarter 4' : 'Quý IV'}
+                              />
+                            </SegmentedControl>
+                          </HStack>
+
+                          {/* Active Hovered Point Callout Bar */}
+                          {(() => {
+                            const visiblePoints =
+                              chartWindow === 'q4'
+                                ? kpiStats.monthlyTrend.slice(-3)
+                                : kpiStats.monthlyTrend;
+                            const activePoint =
+                              visiblePoints.find((p) => p.month === hoveredMonth) ||
+                              visiblePoints[visiblePoints.length - 1];
+
+                            return (
+                              <>
+                                <HStack gap={3} vAlign="center" hAlign="between" wrap="wrap">
+                                  <HStack gap={2} vAlign="center">
+                                    <StatusDot
+                                      variant="accent"
+                                      isPulsing
+                                      label={activePoint.month}
+                                    />
+                                    <Text weight="semibold">
+                                      {isEn
+                                        ? `Month ${activePoint.month}:`
+                                        : `Tháng ${activePoint.month}:`}{' '}
+                                      {formatVnd(activePoint.revenue)}
+                                    </Text>
+                                  </HStack>
+                                  <Badge
+                                    variant="blue"
+                                    label={`${isEn ? 'Recovered:' : 'Thu hồi:'} ${activePoint.netsKg} kg lưới`}
+                                  />
+                                </HStack>
+
+                                {/* Responsive Animated Column Chart */}
+                                <div
+                                  style={{
+                                    width: '100%',
+                                    height: 220,
+                                    display: 'flex',
+                                    alignItems: 'flex-end',
+                                    justifyContent: 'space-between',
+                                    gap: 16,
+                                    paddingTop: 24,
+                                    paddingBottom: 8,
+                                    borderBottom: '1px solid var(--color-border)',
+                                  }}
+                                >
+                                  {visiblePoints.map((point, idx) => {
+                                    const maxRev = 20_000_000;
+                                    const heightPct = Math.max(
+                                      20,
+                                      Math.min(100, Math.round((point.revenue / maxRev) * 100))
+                                    );
+                                    const isHighlighted = activePoint.month === point.month;
+                                    return (
+                                      <div
+                                        key={point.month}
+                                        onMouseEnter={() => setHoveredMonth(point.month)}
+                                        style={{
+                                          flex: 1,
+                                          height: '100%',
+                                          display: 'flex',
+                                          flexDirection: 'column',
+                                          alignItems: 'center',
+                                          justifyContent: 'flex-end',
+                                          gap: 6,
+                                        }}
+                                      >
+                                        <Text
+                                          type="supporting"
+                                          weight={isHighlighted ? 'semibold' : 'normal'}
+                                          hasTabularNumbers
+                                        >
+                                          {formatCompactVnd(point.revenue, locale)}
+                                        </Text>
+                                        <div
+                                          className="cms-chart-bar"
+                                          title={`${point.month}: ${formatVnd(point.revenue)} • ${point.netsKg}kg`}
+                                          style={{
+                                            width: '100%',
+                                            maxWidth: chartWindow === 'q4' ? 68 : 46,
+                                            height: `${heightPct}%`,
+                                            animationDelay: `${idx * 65}ms`,
+                                            borderRadius: '8px 8px 3px 3px',
+                                            background: isHighlighted
+                                              ? 'var(--color-accent)'
+                                              : 'var(--color-border-emphasized, rgba(120,120,128,0.32))',
+                                          }}
+                                        />
+                                        <Text
+                                          type="label"
+                                          weight={isHighlighted ? 'semibold' : 'normal'}
+                                          hasTabularNumbers
+                                        >
+                                          {point.month}
+                                        </Text>
+                                        <Text type="supporting" hasTabularNumbers>
+                                          {point.netsKg}kg
+                                        </Text>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </>
+                            );
+                          })()}
+
+                          <HStack gap={4} vAlign="center" hAlign="between" wrap="wrap">
+                            <HStack gap={2} vAlign="center">
+                              <StatusDot variant="accent" label="Selected Month" />
+                              <Text type="supporting">
+                                {isEn
+                                  ? 'Interactive bar selection'
+                                  : 'Chạm hoặc rê chuột lên cột để đối chiếu'}
+                              </Text>
+                            </HStack>
+                            <Text type="supporting" hasTabularNumbers>
+                              {isEn ? 'Average ticket value:' : 'Giá trị đơn trung bình:'}{' '}
+                              {formatVnd(
+                                kpiStats.totalOrders > 0
+                                  ? Math.round(kpiStats.revenue / kpiStats.totalOrders)
+                                  : 384000
+                              )}
+                            </Text>
+                          </HStack>
+                        </VStack>
+                      </Card>
+                    </div>
+
+                    {/* Chart 2: Category Distribution & Click-to-Filter Progress Chart */}
+                    <div className="cms-anim-enter cms-anim-delay-3">
+                      <Card>
+                        <VStack gap={4}>
+                          <HStack gap={2} vAlign="center" hAlign="between" wrap="wrap">
+                            <VStack gap={0.5}>
+                              <Heading level={3}>
+                                {isEn
+                                  ? 'Category Stock & Inventory Value Distribution'
+                                  : 'Tỷ Trọng Tồn Kho & Giá Trị Theo Danh Mục'}
+                              </Heading>
+                              <Text type="supporting">
+                                {isEn
+                                  ? 'Click any category row to filter products in that category'
+                                  : 'Bấm vào từng dòng danh mục để mở danh sách sản phẩm thuộc nhóm đó'}
+                              </Text>
+                            </VStack>
+                            <Button
+                              label={isEn ? 'Manage Categories' : 'Quản lý danh mục'}
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => setActiveTab('categories')}
+                            />
+                          </HStack>
+
+                          <VStack gap={2}>
+                            {kpiStats.categoryBreakdown.map((cat) => {
+                              const maxStock = 100;
+                              return (
+                                <div
+                                  key={cat.slug}
+                                  className="cms-category-row"
+                                  onClick={() => {
+                                    setProductCatFilter(cat.slug);
+                                    setActiveTab('products');
+                                  }}
+                                >
+                                  <VStack gap={1.5}>
+                                    <HStack gap={2} vAlign="center" hAlign="between">
+                                      <HStack gap={1.5} vAlign="center">
+                                        <Text weight="medium">{cat.name}</Text>
+                                        <Badge
+                                          variant="neutral"
+                                          label={`${cat.productCount} ${isEn ? 'SKUs' : 'mẫu'}`}
+                                        />
+                                      </HStack>
+                                      <Text type="supporting" hasTabularNumbers>
+                                        {cat.totalStock} {t('common.pieces')} •{' '}
+                                        {formatVnd(cat.inventoryValue)}
+                                      </Text>
+                                    </HStack>
+                                    <ProgressBar
+                                      label={cat.name}
+                                      isLabelHidden
+                                      value={Math.min(maxStock, cat.totalStock)}
+                                      max={maxStock}
+                                      variant={cat.totalStock <= 15 ? 'warning' : 'accent'}
+                                    />
+                                  </VStack>
+                                </div>
+                              );
+                            })}
+                          </VStack>
+                        </VStack>
+                      </Card>
+                    </div>
                   </Grid>
 
                   {/* Low Stock Material Alert Banner */}
@@ -2133,8 +2341,8 @@ export default function AdminCmsPage() {
                 inspectedOrder
                   ? `${isEn ? '3D Crafting Ticket:' : 'Phiếu chế tác 3D:'} ${inspectedOrder.orderCode}`
                   : isEn
-                  ? '3D Crafting Inspector'
-                  : 'Máy Trạm Chế Tác 3D'
+                    ? '3D Crafting Inspector'
+                    : 'Máy Trạm Chế Tác 3D'
               }
               subtitle={
                 inspectedOrder
@@ -2203,8 +2411,8 @@ export default function AdminCmsPage() {
                               ? 'Paid — Click to toggle'
                               : 'Đã thu tiền (Chạm để đổi)'
                             : isEn
-                            ? 'Unpaid — Click to mark paid'
-                            : 'Chưa thu tiền (Bấm xác nhận thu)'
+                              ? 'Unpaid — Click to mark paid'
+                              : 'Chưa thu tiền (Bấm xác nhận thu)'
                         }
                         variant="secondary"
                         size="sm"
@@ -2356,12 +2564,11 @@ export default function AdminCmsPage() {
                     label={
                       isEn
                         ? `Advance to Next Stage`
-                        : `Chuyển sang "${
-                            getOrderStatusInfo(
-                              NEXT_ORDER_STATUS[inspectedOrder.status] as OrderStatus,
-                              false
-                            ).label
-                          }"`
+                        : `Chuyển sang "${getOrderStatusInfo(
+                          NEXT_ORDER_STATUS[inspectedOrder.status] as OrderStatus,
+                          false
+                        ).label
+                        }"`
                     }
                     variant="primary"
                     onClick={() => {
@@ -2395,8 +2602,8 @@ export default function AdminCmsPage() {
                     ? 'Update Category'
                     : 'Cập Nhật Danh Mục Sản Phẩm'
                   : isEn
-                  ? 'Create New Category'
-                  : 'Thêm Danh Mục Mới'
+                    ? 'Create New Category'
+                    : 'Thêm Danh Mục Mới'
               }
               subtitle={
                 isEn
@@ -2536,8 +2743,8 @@ export default function AdminCmsPage() {
                     ? 'Update Product & Cloudinary Image'
                     : 'Cập Nhật Sản Phẩm & Hình Ảnh Cloudinary'
                   : isEn
-                  ? 'Create New Product & Cloudinary Image'
-                  : 'Thêm Sản Phẩm Mới & Hình Ảnh Cloudinary'
+                    ? 'Create New Product & Cloudinary Image'
+                    : 'Thêm Sản Phẩm Mới & Hình Ảnh Cloudinary'
               }
               subtitle={
                 isEn
@@ -2593,13 +2800,13 @@ export default function AdminCmsPage() {
                       productCategoryOptions.length > 0
                         ? productCategoryOptions
                         : [
-                            { value: 'bag', label: 'Túi xách lưới (bag)' },
-                            { value: 'basket', label: 'Giỏ đựng đồ (basket)' },
-                            { value: 'wallet', label: 'Ví tiền (wallet)' },
-                            { value: 'apparel', label: 'Áo quần (apparel)' },
-                            { value: 'bracelet', label: 'Vòng tay (bracelet)' },
-                            { value: 'accessory', label: 'Phụ kiện (accessory)' },
-                          ]
+                          { value: 'bag', label: 'Túi xách lưới (bag)' },
+                          { value: 'basket', label: 'Giỏ đựng đồ (basket)' },
+                          { value: 'wallet', label: 'Ví tiền (wallet)' },
+                          { value: 'apparel', label: 'Áo quần (apparel)' },
+                          { value: 'bracelet', label: 'Vòng tay (bracelet)' },
+                          { value: 'accessory', label: 'Phụ kiện (accessory)' },
+                        ]
                     }
                   />
 
@@ -2751,8 +2958,8 @@ export default function AdminCmsPage() {
                     ? 'Update Shell / Snail Material'
                     : 'Cập Nhật Nguyên Liệu Vỏ Sò / Ốc Biển'
                   : isEn
-                  ? 'Add New Marine Accessory'
-                  : 'Thêm Phụ Kiện Biển Mới'
+                    ? 'Add New Marine Accessory'
+                    : 'Thêm Phụ Kiện Biển Mới'
               }
               onOpenChange={setIsMaterialModalOpen}
             />
@@ -2889,13 +3096,12 @@ export default function AdminCmsPage() {
         title={
           isEn
             ? `Delete ${deleteTarget?.type}?`
-            : `Xóa ${
-                deleteTarget?.type === 'category'
-                  ? 'danh mục'
-                  : deleteTarget?.type === 'product'
-                  ? 'sản phẩm'
-                  : 'nguyên liệu'
-              }?`
+            : `Xóa ${deleteTarget?.type === 'category'
+              ? 'danh mục'
+              : deleteTarget?.type === 'product'
+                ? 'sản phẩm'
+                : 'nguyên liệu'
+            }?`
         }
         description={
           isEn
@@ -2905,13 +3111,12 @@ export default function AdminCmsPage() {
         actionLabel={
           isEn
             ? `Delete`
-            : `Xóa ${
-                deleteTarget?.type === 'category'
-                  ? 'danh mục'
-                  : deleteTarget?.type === 'product'
-                  ? 'sản phẩm'
-                  : 'nguyên liệu'
-              }`
+            : `Xóa ${deleteTarget?.type === 'category'
+              ? 'danh mục'
+              : deleteTarget?.type === 'product'
+                ? 'sản phẩm'
+                : 'nguyên liệu'
+            }`
         }
         cancelLabel={t('common.cancel')}
         actionVariant="destructive"
