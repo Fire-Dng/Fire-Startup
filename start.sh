@@ -156,6 +156,7 @@ print_usage() {
 Cách dùng: ./start.sh [TÙY CHỌN]
 
   (mặc định)   Khởi chạy toàn bộ hệ thống (Store, CMS, API)
+  --migrate    Chạy migration cập nhật cấu trúc dữ liệu & danh mục MongoDB
   --seed       Nạp lại dữ liệu mẫu vào MongoDB
   --test       Chạy kiểm thử Backend và kiểm tra build Web Store + Web CMS
   --install    Cài đặt lại toàn bộ dependencies
@@ -190,6 +191,16 @@ case "${MODE}" in
     ensure_env_files
     ensure_dependencies "true"
     echo -e "${GREEN}✔ Đã cài đặt xong toàn bộ dependencies.${NC}"
+    exit 0
+    ;;
+  --migrate)
+    print_banner
+    check_prerequisites
+    ensure_env_files
+    ensure_dependencies "false"
+    echo -e "${CYAN}🔄 Đang chạy Database Migration...${NC}"
+    (cd "${BACKEND_DIR}" && npm run migrate:force)
+    echo -e "${GREEN}✔ Hoàn tất Migration!${NC}"
     exit 0
     ;;
   --seed)

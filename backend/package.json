@@ -6,6 +6,9 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
+    "migrate": "node src/migrations/migrator.js",
+    "migrate:status": "node src/migrations/migrator.js status",
+    "migrate:force": "node src/migrations/migrator.js force",
     "seed": "node src/seeds/seed.js",
     "cloudinary:sync": "node src/scripts/syncToCloudinary.js",
     "test": "node --test tests/*.test.js"

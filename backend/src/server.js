@@ -3,6 +3,7 @@ const { execSync } = require('child_process');
 const app = require('./app');
 const env = require('./config/env');
 const { connectDB } = require('./config/db');
+const { runMigrations } = require('./migrations/migrator');
 const { seedDatabase } = require('./seeds/seed');
 const { startKeepAliveHeartbeat, stopKeepAliveHeartbeat } = require('./services/keepAlive.service');
 
@@ -124,6 +125,7 @@ const listenWithFallback = async (port) => {
 const startServer = async () => {
   try {
     await connectDB();
+    await runMigrations({ force: false });
     await seedDatabase({ force: false });
 
     const servers = await listenWithFallback(env.PORT);
