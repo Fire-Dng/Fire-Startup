@@ -1,6 +1,13 @@
 import axios from 'axios';
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+function normalizeApiBaseUrl(rawUrl) {
+  const fallback = 'http://localhost:5000/api';
+  const trimmed = String(rawUrl || fallback).trim().replace(/\/+$/, '');
+  if (!trimmed) return fallback;
+  return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
+}
+
+export const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
 export const TOKEN_KEY = 'dtu_wavo_token';
 
 const apiClient = axios.create({

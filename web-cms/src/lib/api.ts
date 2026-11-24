@@ -678,7 +678,8 @@ async function fetchApi<T>(
   endpoint: string,
   options?: RequestInit
 ): Promise<{ success: boolean; data: T; message?: string; meta?: Record<string, unknown> }> {
-  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${cleanEndpoint}`;
   const res = await fetch(url, {
     ...options,
     headers: {

@@ -1573,7 +1573,6 @@ export default function AdminCmsPage() {
                         size="lg"
                         width="100%"
                         isLoading={isLoggingIn}
-                        onClick={() => handleLoginSubmit()}
                       />
 
                       <Divider />

@@ -58,6 +58,34 @@ if (env.NODE_ENV !== 'test') {
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
+// Normalize duplicate slashes (e.g. //auth/login -> /auth/login) and auto-prefix /api when omitted by client env vars
+const DIRECT_API_PREFIXES = [
+  '/auth',
+  '/content',
+  '/categories',
+  '/products',
+  '/materials',
+  '/custom-designs',
+  '/orders',
+  '/admin',
+  '/media',
+  '/health',
+  '/ping',
+];
+app.use((req, _res, next) => {
+  if (req.url.includes('//')) {
+    req.url = req.url.replace(/\/{2,}/g, '/');
+  }
+  const pathOnly = req.url.split('?')[0];
+  if (
+    !pathOnly.startsWith('/api') &&
+    DIRECT_API_PREFIXES.some((prefix) => pathOnly === prefix || pathOnly.startsWith(`${prefix}/`))
+  ) {
+    req.url = `/api${req.url}`;
+  }
+  next();
+});
+
 // Static serving for Smart Local Fallback uploads (/uploads/landing/..., /uploads/products/..., etc.)
 app.use('/uploads', express.static(LOCAL_UPLOAD_ROOT));
 
