@@ -4,9 +4,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Theme } from '@astryxdesign/core/theme';
 import { AppShell } from '@astryxdesign/core/AppShell';
 import { TopNav, TopNavHeading } from '@astryxdesign/core/TopNav';
-import { SideNav, SideNavHeading, SideNavSection, SideNavItem } from '@astryxdesign/core/SideNav';
+import { SideNav, SideNavSection, SideNavItem } from '@astryxdesign/core/SideNav';
 import { Layout, LayoutHeader, LayoutContent, LayoutFooter } from '@astryxdesign/core/Layout';
-import { Section } from '@astryxdesign/core/Section';
 import { Card } from '@astryxdesign/core/Card';
 import { Grid } from '@astryxdesign/core/Grid';
 import { VStack } from '@astryxdesign/core/VStack';
@@ -30,11 +29,15 @@ import { Table, proportional, pixel, type TableColumn } from '@astryxdesign/core
 import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog';
 import { AlertDialog } from '@astryxdesign/core/AlertDialog';
 import { Drawer, DrawerHeader } from '@astryxdesign/core/Drawer';
+import { FormLayout } from '@astryxdesign/core/FormLayout';
+import { MetadataList, MetadataListItem } from '@astryxdesign/core/MetadataList';
+import { List, ListItem } from '@astryxdesign/core/List';
+import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
+import { ProgressBar } from '@astryxdesign/core/ProgressBar';
+import { EmptyState } from '@astryxdesign/core/EmptyState';
 
 import { themes, defaultThemeSlug } from '@/astryx-themes';
 import { ThreeCanvasViewer } from '@/components/three/ThreeCanvasViewer';
-import { BomPriceBreakdownCard } from '@/components/common/BomPriceBreakdownCard';
-import { OrderStatusStepper } from '@/components/common/OrderStatusStepper';
 import { S3ImageUploader } from '@/components/common/S3ImageUploader';
 import { formatVnd } from '@/components/ui/PriceTag';
 import { ASSETS, resolveAssetUrl } from '@/config/assets';
@@ -175,24 +178,61 @@ function formatDateTimeDisplay(isoString: string, isEn: boolean): string {
   }
 }
 
-function getOrderStatusBadge(
+const ORDER_STAGE_STEPS: OrderStatus[] = [
+  'pending',
+  'confirmed',
+  'in_crafting',
+  'quality_check',
+  'shipping',
+  'delivered',
+];
+
+function getOrderStatusInfo(
   status: OrderStatus,
   isEn: boolean
-): { label: string; variant: 'neutral' | 'info' | 'success' | 'warning' | 'error' | 'blue' | 'teal' | 'orange' | 'green' } {
+): {
+  label: string;
+  badgeVariant: 'neutral' | 'blue' | 'orange' | 'teal' | 'green' | 'error';
+  progressPct: number;
+} {
   const map: Record<
     OrderStatus,
-    { vi: string; en: string; variant: 'neutral' | 'info' | 'success' | 'warning' | 'error' | 'blue' | 'teal' | 'orange' | 'green' }
+    {
+      vi: string;
+      en: string;
+      badgeVariant: 'neutral' | 'blue' | 'orange' | 'teal' | 'green' | 'error';
+      progressPct: number;
+    }
   > = {
-    pending: { vi: 'Chờ xác nhận', en: 'Pending', variant: 'warning' },
-    confirmed: { vi: 'Đã xác nhận BOM', en: 'Confirmed', variant: 'blue' },
-    in_crafting: { vi: 'Đang chế tác 3D', en: 'In 3D Crafting', variant: 'orange' },
-    quality_check: { vi: 'Kiểm định QC', en: 'Quality Check', variant: 'teal' },
-    shipping: { vi: 'Đang giao hàng', en: 'Shipping', variant: 'blue' },
-    delivered: { vi: 'Đã hoàn thành', en: 'Delivered', variant: 'green' },
-    cancelled: { vi: 'Đã hủy', en: 'Cancelled', variant: 'error' },
+    pending: { vi: '1. Chờ xác nhận', en: '1. Pending', badgeVariant: 'neutral', progressPct: 16 },
+    confirmed: { vi: '2. Đã duyệt BOM', en: '2. Confirmed', badgeVariant: 'blue', progressPct: 33 },
+    in_crafting: {
+      vi: '3. Đang đan & đính 3D',
+      en: '3. In 3D Crafting',
+      badgeVariant: 'orange',
+      progressPct: 55,
+    },
+    quality_check: {
+      vi: '4. Kiểm định QC',
+      en: '4. Quality Check',
+      badgeVariant: 'teal',
+      progressPct: 75,
+    },
+    shipping: { vi: '5. Đang giao hàng', en: '5. Shipping', badgeVariant: 'blue', progressPct: 90 },
+    delivered: {
+      vi: '6. Đã hoàn thành',
+      en: '6. Delivered',
+      badgeVariant: 'green',
+      progressPct: 100,
+    },
+    cancelled: { vi: 'Đã hủy', en: 'Cancelled', badgeVariant: 'error', progressPct: 0 },
   };
   const entry = map[status] || map.pending;
-  return { label: isEn ? entry.en : entry.vi, variant: entry.variant };
+  return {
+    label: isEn ? entry.en : entry.vi,
+    badgeVariant: entry.badgeVariant,
+    progressPct: entry.progressPct,
+  };
 }
 
 const NEXT_ORDER_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
@@ -232,7 +272,7 @@ export default function AdminCmsPage() {
   const [selectedInspectorPlacementId, setSelectedInspectorPlacementId] = useState<string | null>(
     null
   );
-  const [checkedMaterialIds, setCheckedMaterialIds] = useState<string[]>([]);
+  const [checkedPlacementIds, setCheckedPlacementIds] = useState<string[]>([]);
 
   // Product Form Dialog State
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -294,16 +334,6 @@ export default function AdminCmsPage() {
       if (serverOrders && serverOrders.length > 0) {
         setOrders(serverOrders);
         setInspectedOrder(serverOrders[0]);
-      } else {
-        try {
-          const raw = localStorage.getItem('dtu_recent_orders_v1');
-          const localOrders: Order[] = raw ? JSON.parse(raw) : [];
-          if (localOrders.length > 0) {
-            setOrders([...localOrders, DEMO_CRAFTING_ORDER]);
-          }
-        } catch {
-          // Ignore
-        }
       }
       if (prodList.length > 0) setProducts(prodList);
       if (matList.length > 0) setMaterials(matList);
@@ -385,8 +415,8 @@ export default function AdminCmsPage() {
       if (inspectedOrder?._id === order._id) setInspectedOrder(updated);
       notify(
         isEn
-          ? `Order ${order.orderCode} advanced to "${nextStatus}" (BR-05).`
-          : `Đã chuyển đơn ${order.orderCode} sang bước "${nextStatus}" (BR-05).`
+          ? `Order ${order.orderCode} moved to "${nextStatus}"`
+          : `Đã chuyển đơn ${order.orderCode} sang trạng thái mới`
       );
     } catch {
       const fallbackUpdated: Order = {
@@ -398,8 +428,8 @@ export default function AdminCmsPage() {
       if (inspectedOrder?.orderCode === order.orderCode) setInspectedOrder(fallbackUpdated);
       notify(
         isEn
-          ? `Order ${order.orderCode} advanced to "${nextStatus}" (BR-05).`
-          : `Đã chuyển đơn ${order.orderCode} sang bước "${nextStatus}" (BR-05).`
+          ? `Order ${order.orderCode} moved to "${nextStatus}"`
+          : `Đã chuyển đơn ${order.orderCode} sang trạng thái mới`
       );
     }
   };
@@ -418,12 +448,12 @@ export default function AdminCmsPage() {
     }
     notify(
       isEn
-        ? `Updated payment status for order ${order.orderCode}.`
-        : `Đã cập nhật trạng thái thanh toán đơn ${order.orderCode}.`
+        ? `Updated payment status for ${order.orderCode}`
+        : `Đã cập nhật thanh toán cho đơn ${order.orderCode}`
     );
   };
 
-  // Save Product (Create / Edit) with explicit `image`, `imageUrl`, `thumbnail`, `images`
+  // Save Product (Create / Edit)
   const handleSaveProduct = async () => {
     if (!prodForm.name.trim()) return;
     const resolvedImg =
@@ -492,8 +522,8 @@ export default function AdminCmsPage() {
     setEditingProduct(null);
     notify(
       isEn
-        ? 'Saved product & Cloudinary image configuration.'
-        : 'Đã lưu sản phẩm & trường hình ảnh Cloudinary thành công.'
+        ? 'Saved product & Cloudinary image'
+        : 'Đã lưu sản phẩm & hình ảnh Cloudinary thành công'
     );
   };
 
@@ -540,8 +570,8 @@ export default function AdminCmsPage() {
     setEditingMaterial(null);
     notify(
       isEn
-        ? 'Updated shell/snail Cloudinary image & BOM inventory.'
-        : 'Đã cập nhật ảnh Cloudinary & kho nguyên liệu vỏ sò / ốc biển thành công.'
+        ? 'Saved material & BOM inventory'
+        : 'Đã cập nhật nguyên liệu vỏ sò / ốc biển & tồn kho BOM'
     );
   };
 
@@ -555,11 +585,7 @@ export default function AdminCmsPage() {
         // Fallback local removal
       }
       setProducts((prev) => prev.filter((p) => p._id !== deleteTarget.id));
-      notify(
-        isEn
-          ? `Deleted product "${deleteTarget.name}".`
-          : `Đã xóa sản phẩm "${deleteTarget.name}".`
-      );
+      notify(isEn ? `Deleted "${deleteTarget.name}"` : `Đã xóa sản phẩm "${deleteTarget.name}"`);
     } else {
       try {
         await deleteMaterialAdmin(deleteTarget.id);
@@ -567,11 +593,7 @@ export default function AdminCmsPage() {
         // Fallback local removal
       }
       setMaterials((prev) => prev.filter((m) => m._id !== deleteTarget.id));
-      notify(
-        isEn
-          ? `Deleted material "${deleteTarget.name}".`
-          : `Đã xóa nguyên liệu "${deleteTarget.name}".`
-      );
+      notify(isEn ? `Deleted "${deleteTarget.name}"` : `Đã xóa nguyên liệu "${deleteTarget.name}"`);
     }
     setDeleteTarget(null);
   };
@@ -580,14 +602,14 @@ export default function AdminCmsPage() {
   const orderColumns: TableColumn<OrderRow>[] = [
     {
       key: 'orderCode',
-      header: isEn ? 'Order Code & Time' : 'Mã đơn & Thời gian',
+      header: isEn ? 'Order Code' : 'Mã đơn hàng',
       width: proportional(1.2, { minWidth: 165 }),
       renderCell: (row) => (
         <VStack gap={0.5}>
           <Text type="code" weight="semibold">
             {row.orderCode}
           </Text>
-          <Text type="supporting">
+          <Text type="supporting" hasTabularNumbers>
             {isHydrated ? formatDateTimeDisplay(row.createdAt, isEn) : row.createdAt.slice(0, 10)}
           </Text>
         </VStack>
@@ -608,12 +630,24 @@ export default function AdminCmsPage() {
     },
     {
       key: 'items',
-      header: isEn ? 'Crafting Type' : 'Loại chế tác',
-      width: proportional(1, { minWidth: 140 }),
+      header: isEn ? 'Order Type' : 'Phân loại đơn',
+      width: proportional(1, { minWidth: 145 }),
       renderCell: (row) => {
-        const hasCustom = row.items.some((i) => i.isCustom);
-        return hasCustom ? (
-          <Badge variant="purple" label={isEn ? '3D Blueprint' : 'Có bản vẽ 3D'} />
+        const customItem = row.items.find((i) => i.isCustom);
+        const charmCount = customItem?.customDesignSnapshot?.placements?.length || 0;
+        return customItem ? (
+          <VStack gap={0.5}>
+            <Text weight="medium">{isEn ? '3D Custom Craft' : 'Chế tác 3D'}</Text>
+            <Text type="supporting">
+              {charmCount > 0
+                ? isEn
+                  ? `${charmCount} attached shells`
+                  : `Đính ${charmCount} vỏ sò / charm`
+                : isEn
+                ? 'Custom color / size'
+                : 'Tùy chỉnh màu dây'}
+            </Text>
+          </VStack>
         ) : (
           <Text type="supporting">{isEn ? 'Standard Blank' : 'Phôi tiêu chuẩn'}</Text>
         );
@@ -622,42 +656,43 @@ export default function AdminCmsPage() {
     {
       key: 'finalAmount',
       header: isEn ? 'Total & Payment' : 'Tổng tiền & Thanh toán',
-      width: proportional(1.1, { minWidth: 155 }),
+      width: proportional(1.1, { minWidth: 160 }),
       align: 'end',
       renderCell: (row) => (
-        <VStack gap={1} hAlign="end">
+        <VStack gap={0.5} hAlign="end">
           <Text weight="semibold" hasTabularNumbers>
             {formatVnd(row.finalAmount)}
           </Text>
-          <Button
-            label={
-              row.paymentStatus === 'paid'
+          <HStack gap={1} vAlign="center" hAlign="end">
+            <StatusDot
+              variant={row.paymentStatus === 'paid' ? 'success' : 'warning'}
+              label={row.paymentStatus === 'paid' ? 'Paid' : 'Unpaid'}
+            />
+            <Text type="supporting">
+              {row.paymentStatus === 'paid'
                 ? isEn
                   ? 'Paid (VietQR)'
                   : 'Đã thanh toán'
                 : isEn
-                ? 'Unpaid'
-                : 'Chưa thu tiền'
-            }
-            variant="ghost"
-            size="sm"
-            onClick={() => handleTogglePayment(row)}
-          />
+                ? 'Unpaid (COD)'
+                : 'Chưa thu tiền'}
+            </Text>
+          </HStack>
         </VStack>
       ),
     },
     {
       key: 'status',
-      header: isEn ? 'Status (BR-05)' : 'Trạng thái (BR-05)',
-      width: proportional(1.1, { minWidth: 150 }),
+      header: isEn ? 'Crafting Stage' : 'Tiến độ chế tác',
+      width: proportional(1.1, { minWidth: 155 }),
       renderCell: (row) => {
-        const st = getOrderStatusBadge(row.status, isEn);
-        return <Badge variant={st.variant} label={st.label} />;
+        const st = getOrderStatusInfo(row.status, isEn);
+        return <Badge variant={st.badgeVariant} label={st.label} />;
       },
     },
     {
       key: '_id',
-      header: isEn ? '3D Workstation' : 'Máy trạm 3D Inspector',
+      header: isEn ? 'Actions' : 'Thao tác',
       width: pixel(210),
       align: 'end',
       renderCell: (row) => {
@@ -666,19 +701,19 @@ export default function AdminCmsPage() {
           <HStack gap={1.5} hAlign="end" vAlign="center">
             {nextSt && (
               <Button
-                label={isEn ? 'Next Step' : 'Bước kế'}
+                label={isEn ? 'Advance' : 'Chuyển bước'}
                 variant="secondary"
                 size="sm"
                 onClick={() => handleStepOrderStatus(row, nextSt)}
               />
             )}
             <Button
-              label={isEn ? '3D Ticket' : 'Phiếu 3D'}
+              label={isEn ? 'Inspect 3D' : 'Mở phiếu 3D'}
               variant="primary"
               size="sm"
               onClick={() => {
                 setInspectedOrder(row);
-                setCheckedMaterialIds([]);
+                setCheckedPlacementIds([]);
                 setSelectedInspectorPlacementId(null);
                 setIsInspectorOpen(true);
               }}
@@ -693,17 +728,16 @@ export default function AdminCmsPage() {
   const productColumns: TableColumn<ProductRow>[] = [
     {
       key: 'name',
-      header: isEn ? 'Product & Cloudinary Image' : 'Sản phẩm & Ảnh Cloudinary',
-      width: proportional(2, { minWidth: 260 }),
+      header: isEn ? 'Product & Cloudinary Image' : 'Sản phẩm & Hình ảnh Cloudinary',
+      width: proportional(2.2, { minWidth: 260 }),
       renderCell: (row) => {
         const rawImg = row.image || row.imageUrl || row.thumbnail || row.images?.[0];
-        const isCloud = rawImg?.includes('cloudinary.com');
         return (
           <HStack gap={3} vAlign="center">
             <div
               style={{
-                width: 48,
-                height: 48,
+                width: 44,
+                height: 44,
                 borderRadius: 8,
                 overflow: 'hidden',
                 flexShrink: 0,
@@ -719,12 +753,12 @@ export default function AdminCmsPage() {
               />
             </div>
             <VStack gap={0.5}>
-              <Text weight="semibold">{row.name}</Text>
-              <HStack gap={1.5} vAlign="center" wrap="wrap">
-                <Text type="code">{row.model3D?.meshPreset || 'tote_bag'}</Text>
-                <Text type="supporting">• {row.ecoImpact?.netWeightGrams || 350}g lưới</Text>
-                {isCloud && <Badge variant="blue" label="Cloudinary" />}
-              </HStack>
+              <Text weight="semibold" maxLines={1}>
+                {row.name}
+              </Text>
+              <Text type="supporting">
+                Mesh: {row.model3D?.meshPreset || 'tote_bag'} • {row.ecoImpact?.netWeightGrams || 350}g lưới thu hồi
+              </Text>
             </VStack>
           </HStack>
         );
@@ -747,34 +781,32 @@ export default function AdminCmsPage() {
             {formatVnd(row.basePrice)}
           </Text>
           <Text type="supporting" hasTabularNumbers>
-            +{formatVnd(row.craftFee)} phí 3D
+            +{formatVnd(row.craftFee)} phí đan 3D
           </Text>
         </VStack>
       ),
     },
     {
       key: 'stock',
-      header: isEn ? 'Blank Stock' : 'Tồn kho phôi',
+      header: isEn ? 'Stock' : 'Tồn kho phôi',
       width: proportional(0.9, { minWidth: 120 }),
       align: 'end',
-      renderCell: (row) => {
-        if (row.stock <= 0) {
-          return <Badge variant="error" label={isEn ? 'Out of stock' : 'Hết phôi'} />;
-        }
-        if (row.stock <= 10) {
-          return <Badge variant="warning" label={`${row.stock} ${t('common.pieces')}`} />;
-        }
-        return (
+      renderCell: (row) => (
+        <HStack gap={1.5} vAlign="center" hAlign="end">
+          <StatusDot
+            variant={row.stock <= 0 ? 'error' : row.stock <= 10 ? 'warning' : 'success'}
+            label={row.stock <= 0 ? 'Out of stock' : 'In stock'}
+          />
           <Text hasTabularNumbers>
             {row.stock} {t('common.pieces')}
           </Text>
-        );
-      },
+        </HStack>
+      ),
     },
     {
       key: '_id',
       header: isEn ? 'Actions' : 'Thao tác',
-      width: pixel(165),
+      width: pixel(160),
       align: 'end',
       renderCell: (row) => (
         <HStack gap={1.5} hAlign="end">
@@ -809,7 +841,7 @@ export default function AdminCmsPage() {
           />
           <Button
             label={isEn ? 'Delete' : 'Xóa'}
-            variant="destructive"
+            variant="ghost"
             size="sm"
             onClick={() => setDeleteTarget({ type: 'product', id: row._id, name: row.name })}
           />
@@ -822,14 +854,14 @@ export default function AdminCmsPage() {
   const materialColumns: TableColumn<MaterialRow>[] = [
     {
       key: 'name',
-      header: isEn ? 'Shell / Snail Material' : 'Nguyên liệu vỏ sò / ốc biển',
-      width: proportional(2, { minWidth: 240 }),
+      header: isEn ? 'Marine Shell / Snail Material' : 'Nguyên liệu vỏ sò / ốc biển',
+      width: proportional(2.1, { minWidth: 240 }),
       renderCell: (row) => (
         <HStack gap={3} vAlign="center">
           <div
             style={{
-              width: 42,
-              height: 42,
+              width: 40,
+              height: 40,
               borderRadius: 8,
               overflow: 'hidden',
               flexShrink: 0,
@@ -844,32 +876,24 @@ export default function AdminCmsPage() {
               style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
             />
           </div>
-          <span
-            style={{
-              width: 16,
-              height: 16,
-              borderRadius: '9999px',
-              backgroundColor: row.colorHex,
-              border: '1px solid var(--color-border)',
-              flexShrink: 0,
-            }}
-          />
           <VStack gap={0.5}>
             <Text weight="semibold">{row.name}</Text>
-            <Text type="code">{row.model3D?.meshPreset}</Text>
+            <Text type="supporting">
+              Preset 3D: {row.model3D?.meshPreset} • Màu {row.colorHex}
+            </Text>
           </VStack>
         </HStack>
       ),
     },
     {
       key: 'materialType',
-      header: isEn ? 'Material Group' : 'Nhóm phụ kiện',
+      header: isEn ? 'Group' : 'Nhóm phụ kiện',
       width: proportional(0.9, { minWidth: 120 }),
-      renderCell: (row) => <Badge variant="teal" label={row.materialType} />,
+      renderCell: (row) => <Badge variant="neutral" label={row.materialType} />,
     },
     {
       key: 'unitPrice',
-      header: isEn ? '3D Unit Price' : 'Đơn giá đính 3D',
+      header: isEn ? 'Unit Price' : 'Đơn giá đính 3D',
       width: proportional(1, { minWidth: 140 }),
       align: 'end',
       renderCell: (row) => (
@@ -880,27 +904,31 @@ export default function AdminCmsPage() {
     },
     {
       key: 'stockQuantity',
-      header: isEn ? 'BOM Inventory (BR-04)' : 'Tồn kho BOM (BR-04)',
+      header: isEn ? 'BOM Inventory' : 'Tồn kho BOM',
       width: proportional(1, { minWidth: 140 }),
       align: 'end',
-      renderCell: (row) => {
-        if (row.stockQuantity <= 0) {
-          return <Badge variant="error" label={isEn ? 'Out of stock' : 'Hết hàng'} />;
-        }
-        if (row.stockQuantity <= 15) {
-          return <Badge variant="warning" label={`${row.stockQuantity} ${t('common.pieces')}`} />;
-        }
-        return (
-          <Text hasTabularNumbers>
+      renderCell: (row) => (
+        <HStack gap={1.5} vAlign="center" hAlign="end">
+          <StatusDot
+            variant={
+              row.stockQuantity <= 0
+                ? 'error'
+                : row.stockQuantity <= 15
+                ? 'warning'
+                : 'success'
+            }
+            label={row.stockQuantity <= 15 ? 'Low stock' : 'In stock'}
+          />
+          <Text hasTabularNumbers weight={row.stockQuantity <= 15 ? 'semibold' : 'normal'}>
             {row.stockQuantity} {t('common.pieces')}
           </Text>
-        );
-      },
+        </HStack>
+      ),
     },
     {
       key: '_id',
       header: isEn ? 'Actions' : 'Thao tác',
-      width: pixel(165),
+      width: pixel(160),
       align: 'end',
       renderCell: (row) => (
         <HStack gap={1.5} hAlign="end">
@@ -926,7 +954,7 @@ export default function AdminCmsPage() {
           />
           <Button
             label={isEn ? 'Delete' : 'Xóa'}
-            variant="destructive"
+            variant="ghost"
             size="sm"
             onClick={() => setDeleteTarget({ type: 'material', id: row._id, name: row.name })}
           />
@@ -936,38 +964,24 @@ export default function AdminCmsPage() {
   ];
 
   const inspectedCustomItem = inspectedOrder?.items.find((i) => i.isCustom && i.customDesignSnapshot);
+  const inspectedStatusInfo = inspectedOrder
+    ? getOrderStatusInfo(inspectedOrder.status, isEn)
+    : null;
 
   const cloudStorageLabel = mediaStatus?.isCloudinaryConfigured
-    ? `Cloudinary (${mediaStatus.cloudName || 'Cloud'})`
-    : isEn
-    ? 'Cloudinary / Local Ready'
-    : 'Cloudinary / Local Sẵn sàng';
+    ? `Cloudinary (${mediaStatus.cloudName || ENV.CLOUDINARY_CLOUD_NAME})`
+    : `Cloudinary (${ENV.CLOUDINARY_CLOUD_NAME || 'fbemz6fi'})`;
 
   if (!isHydrated) {
-    return (
-      <div
-        style={{
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: '#F6FBFF',
-          color: '#0A1317',
-          fontSize: 14,
-          fontWeight: 500,
-        }}
-      >
-        Đang tải NetLoop CMS (Astryx Neutral)...
-      </div>
-    );
+    return null;
   }
 
   return (
     <Theme theme={themes[defaultThemeSlug]} mode={themeMode}>
       <AppShell
         height="fill"
-        variant="elevated"
-        contentPadding={6}
+        variant="surface"
+        contentPadding={0}
         banner={
           toastMsg ? (
             <Banner
@@ -981,20 +995,17 @@ export default function AdminCmsPage() {
         }
         topNav={
           <TopNav
-            label="NetLoop CMS Navigation"
+            label="NetLoop CMS Top Navigation"
             heading={
               <TopNavHeading
-                heading="NetLoop CMS"
-                subheading={isEn ? '3D Ocean Craft & Cloudinary Admin' : 'Quản Trị Xưởng Chế Tác 3D & Cloudinary'}
+                heading="WAVO × ECO GREEN CMS"
+                subheading={isEn ? '3D Craft & Cloudinary Admin' : 'Quản Trị Xưởng Chế Tác 3D'}
               />
             }
             endContent={
               <HStack gap={2} vAlign="center">
                 <HStack gap={1.5} vAlign="center">
-                  <StatusDot
-                    variant={mediaStatus?.isCloudinaryConfigured ? 'success' : 'accent'}
-                    label={cloudStorageLabel}
-                  />
+                  <StatusDot variant="success" label={cloudStorageLabel} />
                   <Text type="supporting">{cloudStorageLabel}</Text>
                 </HStack>
 
@@ -1010,7 +1021,7 @@ export default function AdminCmsPage() {
 
                 <SegmentedControl
                   size="sm"
-                  label={isEn ? 'Theme Mode' : 'Chế độ giao diện'}
+                  label={isEn ? 'Theme Mode' : 'Giao diện'}
                   value={themeMode}
                   onChange={(val) => setThemeMode(val as 'light' | 'dark')}
                 >
@@ -1019,7 +1030,7 @@ export default function AdminCmsPage() {
                 </SegmentedControl>
 
                 <Button
-                  label={isEn ? 'Open Web Store' : 'Mở Web Store'}
+                  label={isEn ? 'Web Store' : 'Mở Web Store'}
                   variant="secondary"
                   size="sm"
                   icon={<Icon icon="externalLink" />}
@@ -1032,37 +1043,17 @@ export default function AdminCmsPage() {
           />
         }
         sideNav={
-          <SideNav
-            collapsible
-            header={
-              <SideNavHeading
-                superheading="DTU Upcycled Craft"
-                heading={isEn ? 'Artisan CMS' : 'Xưởng Thủ Công 3D'}
-                subheading="Astryx Neutral Theme"
-              />
-            }
-            footer={
-              <VStack gap={1}>
-                <Text type="label">
-                  {isEn ? 'Ghost Nets Recovered (BR-08)' : 'Lưới Thu Hồi Đại Dương (BR-08)'}
-                </Text>
-                <Text type="code" hasTabularNumbers>
-                  {(kpiStats.totalNetsGrams / 1000).toFixed(2)} kg (
-                  {kpiStats.totalNetsGrams.toLocaleString(isEn ? 'en-US' : 'vi-VN')}g)
-                </Text>
-              </VStack>
-            }
-          >
+          <SideNav collapsible>
             <SideNavSection title={isEn ? 'Workshop Operations' : 'Vận hành xưởng 3D'}>
               <SideNavItem
-                label={isEn ? 'Overview & KPIs' : 'Tổng quan & Cảnh báo'}
-                icon={isHydrated ? 'info' : undefined}
+                label={isEn ? 'Overview & KPIs' : 'Tổng quan & Chỉ số'}
+                icon="info"
                 isSelected={activeTab === 'dashboard'}
                 onClick={() => setActiveTab('dashboard')}
               />
               <SideNavItem
                 label={isEn ? 'Orders & 3D Tickets' : 'Đơn hàng & Phiếu 3D'}
-                icon={isHydrated ? 'calendar' : undefined}
+                icon="calendar"
                 isSelected={activeTab === 'orders'}
                 endContent={<Badge variant="neutral" label={String(orders.length)} />}
                 onClick={() => setActiveTab('orders')}
@@ -1072,14 +1063,14 @@ export default function AdminCmsPage() {
             <SideNavSection title={isEn ? 'Catalog & Cloudinary' : 'Danh mục & Cloudinary'}>
               <SideNavItem
                 label={isEn ? 'Products & Images' : 'Sản phẩm & Hình ảnh'}
-                icon={isHydrated ? 'viewColumns' : undefined}
+                icon="viewColumns"
                 isSelected={activeTab === 'products'}
                 endContent={<Badge variant="neutral" label={String(products.length)} />}
                 onClick={() => setActiveTab('products')}
               />
               <SideNavItem
-                label={isEn ? 'Materials BOM (BR-04)' : 'Kho Vỏ sò / Ốc BOM'}
-                icon={isHydrated ? 'wrench' : undefined}
+                label={isEn ? 'Materials BOM' : 'Kho Vỏ sò / Ốc BOM'}
+                icon="wrench"
                 isSelected={activeTab === 'materials'}
                 endContent={
                   kpiStats.lowStockMats.length > 0 ? (
@@ -1094,438 +1085,469 @@ export default function AdminCmsPage() {
           </SideNav>
         }
       >
-        <VStack gap={6}>
-          {/* Page Header Region */}
-          <HStack gap={4} vAlign="center" hAlign="between" wrap="wrap">
-            <VStack gap={1}>
-              <Heading level={1}>
-                {activeTab === 'dashboard' &&
-                  (isEn
-                    ? 'Workshop Overview & 3D Crafting Operations'
-                    : 'Tổng Quan Xưởng Thủ Công & Máy Trạm Chế Tác 3D')}
-                {activeTab === 'orders' &&
-                  (isEn
-                    ? 'Orders & 3D Crafting Tickets (BR-05 / BR-07)'
-                    : 'Quản Lý Đơn Hàng & Phiếu Chế Tác 3D (BR-05 / BR-07)')}
-                {activeTab === 'products' &&
-                  (isEn
-                    ? 'Upcycled Product Catalog & Cloudinary Images'
-                    : 'Danh Mục Sản Phẩm Tái Chế & Hình Ảnh Cloudinary')}
-                {activeTab === 'materials' &&
-                  (isEn
-                    ? 'Marine Shell / Snail BOM Inventory (BR-04)'
-                    : 'Kho Nguyên Liệu Vỏ Sò / Ốc Biển BOM (BR-04)')}
-              </Heading>
-              <Text type="supporting">
-                {isEn
-                  ? 'Built with Meta Astryx Design System (Neutral Theme) • Connected to Cloudinary & MongoDB API'
-                  : 'Giao diện quản trị thiết kế bằng Meta Astryx (Neutral Theme) • Kết nối trực tiếp Cloudinary & MongoDB API'}
-              </Text>
-            </VStack>
-
-            <HStack gap={2} vAlign="center">
-              {activeTab === 'products' && (
-                <Button
-                  label={isEn ? 'Add Product Blank' : 'Thêm sản phẩm mới'}
-                  variant="primary"
-                  onClick={() => {
-                    setEditingProduct(null);
-                    setProdForm({
-                      name: '',
-                      slug: '',
-                      category: 'bag',
-                      basePrice: 320000,
-                      craftFee: 30000,
-                      stock: 25,
-                      shortDescription: '',
-                      imageUrl: ASSETS.products.toteBagMain,
-                      meshPreset: 'tote_bag',
-                      glbUrl: '',
-                      netWeightGrams: 380,
-                      originSea: 'Bán đảo Sơn Trà, Đà Nẵng',
-                      isCustomizable: true,
-                    });
-                    setIsProductModalOpen(true);
-                  }}
-                />
-              )}
-              {activeTab === 'materials' && (
-                <Button
-                  label={isEn ? 'Add Shell / Snail' : 'Thêm vỏ sò / ốc mới'}
-                  variant="primary"
-                  onClick={() => {
-                    setEditingMaterial(null);
-                    setMatForm({
-                      name: '',
-                      materialType: 'shell',
-                      unitPrice: 15000,
-                      stockQuantity: 100,
-                      colorHex: PRODUCT_COLOR_PRESETS.sandCream,
-                      thumbnail: ASSETS.materials.scallopShell,
-                      meshPreset: 'scallop_shell',
-                      glbUrl: '',
-                      description: '',
-                    });
-                    setIsMaterialModalOpen(true);
-                  }}
-                />
-              )}
-              {activeTab === 'dashboard' && (
-                <Button
-                  label={isEn ? 'Open 3D Ticket Inspector' : 'Mở Máy Trạm 3D Inspector'}
-                  variant="primary"
-                  onClick={() => {
-                    if (!inspectedOrder && orders.length > 0) {
-                      setInspectedOrder(orders[0]);
-                    }
-                    setIsInspectorOpen(true);
-                  }}
-                />
-              )}
-            </HStack>
-          </HStack>
-
-          <Divider />
-
-          {/* =============================================================== */}
-          {/* VIEW 1: DASHBOARD                                               */}
-          {/* =============================================================== */}
-          {activeTab === 'dashboard' && (
-            <VStack gap={6}>
-              {/* 4 KPI Metric Cards */}
-              <Grid columns={4} gap={4}>
-                <Card>
-                  <VStack gap={1.5}>
-                    <Text type="supporting">
-                      {isEn ? 'Total Workshop Revenue' : 'Tổng doanh thu xưởng'}
-                    </Text>
-                    <Heading level={2}>{formatVnd(kpiStats.revenue)}</Heading>
-                    <Text type="supporting">
-                      {isEn ? 'Includes 3D custom crafting fees' : 'Bao gồm phí đan & đính phụ kiện 3D'}
-                    </Text>
-                  </VStack>
-                </Card>
-
-                <Card>
-                  <VStack gap={1.5}>
-                    <Text type="supporting">
-                      {isEn ? 'Total Orders' : 'Tổng đơn đặt hàng'}
-                    </Text>
-                    <Heading level={2}>
-                      {kpiStats.totalOrders} {isEn ? 'orders' : 'đơn'}
-                    </Heading>
-                    <Text type="supporting">
-                      {isEn ? 'Synced VietQR & COD' : 'Đồng bộ thanh toán VietQR & COD'}
-                    </Text>
-                  </VStack>
-                </Card>
-
-                <Card>
-                  <VStack gap={1.5}>
-                    <Text type="supporting">
-                      {isEn ? 'Active 3D Crafting Tickets' : 'Phiếu đang chế tác 3D'}
-                    </Text>
-                    <Heading level={2}>
-                      {kpiStats.craftingCount} {isEn ? 'tickets' : 'phiếu'}
-                    </Heading>
-                    <Text type="supporting">
-                      {isEn ? 'Ready in 3D Inspector' : 'Đang xử lý trên máy trạm 3D'}
-                    </Text>
-                  </VStack>
-                </Card>
-
-                <Card>
-                  <VStack gap={1.5}>
-                    <Text type="supporting">
-                      {isEn ? 'Ghost Nets Recovered (BR-08)' : 'Lưới ma thu hồi (BR-08)'}
-                    </Text>
-                    <Heading level={2}>{(kpiStats.totalNetsGrams / 1000).toFixed(2)} kg</Heading>
-                    <Text type="supporting" hasTabularNumbers>
-                      {kpiStats.totalNetsGrams.toLocaleString(isEn ? 'en-US' : 'vi-VN')} gram lưới biển
-                    </Text>
-                  </VStack>
-                </Card>
-              </Grid>
-
-              {/* Low Stock Material Alert Banner */}
-              {kpiStats.lowStockMats.length > 0 ? (
-                <Banner
-                  status="warning"
-                  container="card"
-                  collapsible={false}
-                  title={
-                    isEn
-                      ? `Low Stock Shell / Snail BOM Alert (${kpiStats.lowStockMats.length} items <= 15 pcs)`
-                      : `Cảnh báo nguyên liệu vỏ sò / ốc biển sắp cạn kho (${kpiStats.lowStockMats.length} mã <= 15 cái)`
-                  }
-                  description={
-                    isEn
-                      ? 'Replenish BOM stock so customers can continue placing 3D custom orders without interruption.'
-                      : 'Cần nhập bổ sung định mức BOM để khách hàng tiếp tục đính phụ kiện trong phòng 3D Studio.'
-                  }
-                  endContent={
-                    <Button
-                      label={isEn ? 'Manage BOM Stock' : 'Nhập kho BOM'}
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setActiveTab('materials')}
-                    />
-                  }
-                >
-                  <Grid columns={3} gap={3}>
-                    {kpiStats.lowStockMats.map((m) => (
-                      <Card key={m._id} variant="muted">
-                        <HStack gap={2} vAlign="center" hAlign="between">
-                          <VStack gap={0.5}>
-                            <Text weight="semibold">{m.name}</Text>
-                            <Text type="supporting" hasTabularNumbers>
-                              {formatVnd(m.unitPrice)} / {t('common.pieces')}
-                            </Text>
-                          </VStack>
-                          <Badge
-                            variant="warning"
-                            label={`${m.stockQuantity} ${t('common.pieces')}`}
-                          />
-                        </HStack>
-                      </Card>
-                    ))}
-                  </Grid>
-                </Banner>
-              ) : (
-                <Banner
-                  status="info"
-                  container="card"
-                  title={
-                    isEn
-                      ? 'All marine shell & snail BOM materials are well stocked'
-                      : 'Tất cả nguyên liệu vỏ sò, ốc biển trong kho BOM đều đạt định mức an toàn'
-                  }
-                  description={
-                    isEn
-                      ? `Cloudinary Media Storage: ${cloudStorageLabel}`
-                      : `Trạng thái lưu trữ hình ảnh: ${cloudStorageLabel}`
-                  }
-                />
-              )}
-
-              {/* Recent 3D Crafting Tickets Section */}
-              <Section padding={4}>
-                <VStack gap={4}>
-                  <HStack gap={2} vAlign="center" hAlign="between" wrap="wrap">
-                    <VStack gap={0.5}>
-                      <Heading level={2}>
-                        {isEn ? 'Recent 3D Crafting Tickets' : 'Phiếu Chế Tác 3D Mới Tiếp Nhận'}
-                      </Heading>
-                      <Text type="supporting">
-                        {isEn
-                          ? 'Click "3D Ticket" on any row to inspect the customer’s 3D shell placement coordinates.'
-                          : 'Bấm "Phiếu 3D" trên từng dòng để mở máy trạm kiểm tra tọa độ đính vỏ sò 3D của khách.'}
-                      </Text>
-                    </VStack>
-                    <Button
-                      label={isEn ? 'View All Orders' : 'Xem tất cả đơn hàng'}
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setActiveTab('orders')}
-                    />
-                  </HStack>
-
-                  <Table
-                    data={filteredOrders.slice(0, 5)}
-                    columns={orderColumns}
-                    idKey="orderCode"
-                    density="balanced"
-                    hasHover
-                  />
+        <Layout
+          height="fill"
+          padding={6}
+          header={
+            <LayoutHeader hasDivider>
+              <HStack gap={4} vAlign="center" hAlign="between" wrap="wrap">
+                <VStack gap={1}>
+                  <Heading level={1}>
+                    {activeTab === 'dashboard' &&
+                      (isEn
+                        ? 'Workshop Overview & 3D Crafting Operations'
+                        : 'Tổng Quan Xưởng Thủ Công & Máy Trạm Chế Tác 3D')}
+                    {activeTab === 'orders' &&
+                      (isEn
+                        ? 'Orders & 3D Crafting Tickets'
+                        : 'Quản Lý Đơn Hàng & Phiếu Chế Tác 3D')}
+                    {activeTab === 'products' &&
+                      (isEn
+                        ? 'Upcycled Product Catalog & Cloudinary Media'
+                        : 'Danh Mục Sản Phẩm Tái Chế & Hình Ảnh Cloudinary')}
+                    {activeTab === 'materials' &&
+                      (isEn
+                        ? 'Marine Shell & Snail BOM Inventory'
+                        : 'Kho Nguyên Liệu Vỏ Sò & Ốc Biển BOM')}
+                  </Heading>
+                  <Text type="supporting">
+                    {activeTab === 'dashboard' &&
+                      (isEn
+                        ? 'Real-time workshop metrics, ocean ghost net recovery impact, and active 3D crafting tickets.'
+                        : 'Theo dõi doanh thu xưởng, sản lượng lưới đánh cá thu hồi và tiến độ các phiếu chế tác 3D.')}
+                    {activeTab === 'orders' &&
+                      (isEn
+                        ? 'Inspect 3D custom shell attachments, verify VietQR payments, and advance crafting stages.'
+                        : 'Kiểm tra bản vẽ đính vỏ sò 3D của khách, đối soát thanh toán VietQR và cập nhật tiến độ chế tác.')}
+                    {activeTab === 'products' &&
+                      (isEn
+                        ? 'Manage 3D product blanks, base prices, crafting fees, and Cloudinary product images.'
+                        : 'Quản lý phôi sản phẩm 3D, giá gốc, phí khâu thủ công và trường hình ảnh (`image`) trên Cloudinary.')}
+                    {activeTab === 'materials' &&
+                      (isEn
+                        ? 'Track marine shell, snail, and charm stock levels used in the 3D Customizer Studio.'
+                        : 'Quản lý định mức tồn kho các loại vỏ sò, ốc biển và charm đính trong phòng thiết kế 3D Studio.')}
+                  </Text>
                 </VStack>
-              </Section>
-            </VStack>
-          )}
 
-          {/* =============================================================== */}
-          {/* VIEW 2: ORDERS & 3D CRAFTING INSPECTOR                          */}
-          {/* =============================================================== */}
-          {activeTab === 'orders' && (
-            <Section padding={4}>
-              <VStack gap={4}>
-                <HStack gap={3} vAlign="end" wrap="wrap">
-                  <StackItem size="fill">
-                    <TextInput
-                      type="search"
-                      label={isEn ? 'Search orders' : 'Tìm kiếm đơn hàng'}
-                      value={orderSearch}
-                      onChange={setOrderSearch}
-                      placeholder={
-                        isEn
-                          ? 'Order code DTU-..., customer name, or phone...'
-                          : 'Nhập mã đơn DTU-..., tên khách hàng hoặc SĐT...'
-                      }
-                      startIcon="search"
-                      hasClear
-                      width="100%"
-                    />
-                  </StackItem>
-
-                  <Selector
-                    label={isEn ? 'Filter by Crafting Status' : 'Lọc theo trạng thái chế tác'}
-                    value={orderStatusFilter}
-                    onChange={setOrderStatusFilter}
-                    width={240}
-                    options={[
-                      { value: 'all', label: isEn ? 'All statuses (7)' : 'Tất cả trạng thái (7)' },
-                      { value: 'pending', label: t('status.pending') },
-                      { value: 'confirmed', label: t('status.confirmed') },
-                      { value: 'in_crafting', label: t('status.in_crafting') },
-                      { value: 'quality_check', label: t('status.quality_check') },
-                      { value: 'shipping', label: t('status.shipping') },
-                      { value: 'delivered', label: t('status.delivered') },
-                      { value: 'cancelled', label: t('status.cancelled') },
-                    ]}
-                  />
-
-                  {(orderSearch || orderStatusFilter !== 'all') && (
+                <HStack gap={2} vAlign="center">
+                  {activeTab === 'products' && (
                     <Button
-                      label={isEn ? 'Reset filters' : 'Xóa bộ lọc'}
-                      variant="ghost"
+                      label={isEn ? 'New Product' : 'Thêm sản phẩm mới'}
+                      variant="primary"
                       onClick={() => {
-                        setOrderSearch('');
-                        setOrderStatusFilter('all');
+                        setEditingProduct(null);
+                        setProdForm({
+                          name: '',
+                          slug: '',
+                          category: 'bag',
+                          basePrice: 320000,
+                          craftFee: 30000,
+                          stock: 25,
+                          shortDescription: '',
+                          imageUrl: ASSETS.products.toteBagMain,
+                          meshPreset: 'tote_bag',
+                          glbUrl: '',
+                          netWeightGrams: 380,
+                          originSea: 'Bán đảo Sơn Trà, Đà Nẵng',
+                          isCustomizable: true,
+                        });
+                        setIsProductModalOpen(true);
+                      }}
+                    />
+                  )}
+                  {activeTab === 'materials' && (
+                    <Button
+                      label={isEn ? 'New Material' : 'Thêm nguyên liệu BOM'}
+                      variant="primary"
+                      onClick={() => {
+                        setEditingMaterial(null);
+                        setMatForm({
+                          name: '',
+                          materialType: 'shell',
+                          unitPrice: 15000,
+                          stockQuantity: 100,
+                          colorHex: PRODUCT_COLOR_PRESETS.sandCream,
+                          thumbnail: ASSETS.materials.scallopShell,
+                          meshPreset: 'scallop_shell',
+                          glbUrl: '',
+                          description: '',
+                        });
+                        setIsMaterialModalOpen(true);
+                      }}
+                    />
+                  )}
+                  {(activeTab === 'dashboard' || activeTab === 'orders') && (
+                    <Button
+                      label={isEn ? 'Open 3D Inspector' : 'Mở Máy Trạm 3D Inspector'}
+                      variant="primary"
+                      onClick={() => {
+                        if (!inspectedOrder && orders.length > 0) {
+                          setInspectedOrder(orders[0]);
+                        }
+                        setIsInspectorOpen(true);
                       }}
                     />
                   )}
                 </HStack>
+              </HStack>
+            </LayoutHeader>
+          }
+          content={
+            <LayoutContent>
+              {/* =========================================================== */}
+              {/* VIEW 1: DASHBOARD                                           */}
+              {/* =========================================================== */}
+              {activeTab === 'dashboard' && (
+                <VStack gap={6}>
+                  {/* 4 Responsive Metric Cards */}
+                  <Grid columns={{ minWidth: 220, repeat: 'fit' }} gap={4}>
+                    <Card>
+                      <VStack gap={1.5}>
+                        <Text type="supporting">
+                          {isEn ? 'Total Workshop Revenue' : 'Tổng doanh thu xưởng'}
+                        </Text>
+                        <Heading level={2}>{formatVnd(kpiStats.revenue)}</Heading>
+                        <Text type="supporting">
+                          {isEn ? 'Includes 3D custom crafting fees' : 'Bao gồm phí đan & đính phụ kiện 3D'}
+                        </Text>
+                      </VStack>
+                    </Card>
 
-                <Table
-                  data={filteredOrders}
-                  columns={orderColumns}
-                  idKey="orderCode"
-                  density="balanced"
-                  hasHover
-                />
-              </VStack>
-            </Section>
-          )}
+                    <Card>
+                      <VStack gap={1.5}>
+                        <Text type="supporting">
+                          {isEn ? 'Total Orders' : 'Tổng đơn đặt hàng'}
+                        </Text>
+                        <Heading level={2}>
+                          {kpiStats.totalOrders} {isEn ? 'orders' : 'đơn hàng'}
+                        </Heading>
+                        <Text type="supporting">
+                          {isEn ? 'Synced VietQR & COD' : 'Đồng bộ thanh toán VietQR & COD'}
+                        </Text>
+                      </VStack>
+                    </Card>
 
-          {/* =============================================================== */}
-          {/* VIEW 3: PRODUCTS & CLOUDINARY IMAGES                            */}
-          {/* =============================================================== */}
-          {activeTab === 'products' && (
-            <Section padding={4}>
-              <VStack gap={4}>
-                <HStack gap={3} vAlign="end" wrap="wrap">
-                  <StackItem size="fill">
-                    <TextInput
-                      type="search"
-                      label={isEn ? 'Search products' : 'Tìm kiếm sản phẩm'}
-                      value={productSearch}
-                      onChange={setProductSearch}
-                      placeholder={
+                    <Card>
+                      <VStack gap={1.5}>
+                        <Text type="supporting">
+                          {isEn ? 'Active 3D Crafting Tickets' : 'Phiếu đang chế tác 3D'}
+                        </Text>
+                        <Heading level={2}>
+                          {kpiStats.craftingCount} {isEn ? 'tickets' : 'phiếu 3D'}
+                        </Heading>
+                        <Text type="supporting">
+                          {isEn ? 'In progress on 3D workstation' : 'Đang đan & đính ốc tại xưởng'}
+                        </Text>
+                      </VStack>
+                    </Card>
+
+                    <Card>
+                      <VStack gap={1.5}>
+                        <Text type="supporting">
+                          {isEn ? 'Ghost Nets Recovered' : 'Lưới đánh cá thu hồi'}
+                        </Text>
+                        <Heading level={2}>{(kpiStats.totalNetsGrams / 1000).toFixed(2)} kg</Heading>
+                        <Text type="supporting" hasTabularNumbers>
+                          {kpiStats.totalNetsGrams.toLocaleString(isEn ? 'en-US' : 'vi-VN')} gram lưới biển tái sinh
+                        </Text>
+                      </VStack>
+                    </Card>
+                  </Grid>
+
+                  {/* Low Stock Material Alert Banner (using Astryx List instead of nested Card) */}
+                  {kpiStats.lowStockMats.length > 0 && (
+                    <Banner
+                      status="warning"
+                      container="card"
+                      collapsible={false}
+                      title={
                         isEn
-                          ? 'Search product by name...'
-                          : 'Nhập tên túi lưới, giỏ, ví, vòng tay...'
+                          ? `Low Stock BOM Alert (${kpiStats.lowStockMats.length} items below safety threshold)`
+                          : `Cảnh báo tồn kho BOM (${kpiStats.lowStockMats.length} nguyên liệu vỏ sò / ốc dưới ngưỡng an toàn ≤ 15 cái)`
                       }
-                      startIcon="search"
-                      hasClear
-                      width="100%"
-                    />
-                  </StackItem>
-
-                  <Selector
-                    label={isEn ? 'Product Category' : 'Danh mục sản phẩm'}
-                    value={productCatFilter}
-                    onChange={setProductCatFilter}
-                    width={220}
-                    options={[
-                      { value: 'all', label: t('categories.all') },
-                      { value: 'bag', label: t('categories.bag') },
-                      { value: 'basket', label: t('categories.basket') },
-                      { value: 'wallet', label: t('categories.wallet') },
-                      { value: 'apparel', label: t('categories.apparel') },
-                      { value: 'bracelet', label: t('categories.bracelet') },
-                      { value: 'accessory', label: t('categories.accessory') },
-                    ]}
-                  />
-                </HStack>
-
-                <Table
-                  data={filteredProducts}
-                  columns={productColumns}
-                  idKey="_id"
-                  density="balanced"
-                  hasHover
-                />
-              </VStack>
-            </Section>
-          )}
-
-          {/* =============================================================== */}
-          {/* VIEW 4: MATERIALS BOM INVENTORY                                 */}
-          {/* =============================================================== */}
-          {activeTab === 'materials' && (
-            <Section padding={4}>
-              <VStack gap={4}>
-                <HStack gap={3} vAlign="end" wrap="wrap">
-                  <StackItem size="fill">
-                    <TextInput
-                      type="search"
-                      label={isEn ? 'Search shells, snails, charms' : 'Tìm kiếm nguyên liệu BOM'}
-                      value={materialSearch}
-                      onChange={setMaterialSearch}
-                      placeholder={
+                      description={
                         isEn
-                          ? 'Search scallop shell, spiral snail, starfish...'
-                          : 'Tìm vỏ sò điệp, ốc xoắn, sao biển...'
+                          ? 'Restock these materials so customers can continue attaching them in the 3D Studio.'
+                          : 'Bấm vào nguyên liệu bên dưới để cập nhật bổ sung số lượng tồn kho cho phòng 3D Studio.'
                       }
-                      startIcon="search"
-                      hasClear
-                      width="100%"
+                      endContent={
+                        <Button
+                          label={isEn ? 'Open BOM Inventory' : 'Quản lý kho BOM'}
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setActiveTab('materials')}
+                        />
+                      }
+                    >
+                      <List density="compact" hasDividers>
+                        {kpiStats.lowStockMats.map((m) => (
+                          <ListItem
+                            key={m._id}
+                            label={m.name}
+                            description={`${isEn ? '3D Preset:' : 'Mã 3D:'} ${m.model3D?.meshPreset} • ${formatVnd(m.unitPrice)} / ${t('common.pieces')}`}
+                            endContent={
+                              <Badge
+                                variant="warning"
+                                label={`${m.stockQuantity} ${t('common.pieces')}`}
+                              />
+                            }
+                            onClick={() => {
+                              setEditingMaterial(m);
+                              setMatForm({
+                                name: m.name,
+                                materialType: m.materialType,
+                                unitPrice: m.unitPrice,
+                                stockQuantity: m.stockQuantity,
+                                colorHex: m.colorHex,
+                                thumbnail: m.thumbnail || ASSETS.materials.scallopShell,
+                                meshPreset: m.model3D?.meshPreset || 'scallop_shell',
+                                glbUrl: m.model3D?.glbUrl || '',
+                                description: m.description || '',
+                              });
+                              setIsMaterialModalOpen(true);
+                            }}
+                          />
+                        ))}
+                      </List>
+                    </Banner>
+                  )}
+
+                  <Divider />
+
+                  {/* Recent 3D Crafting Tickets (Frame-first: Heading + Stack + Table, no redundant Card wrapper) */}
+                  <VStack gap={4}>
+                    <HStack gap={2} vAlign="center" hAlign="between" wrap="wrap">
+                      <VStack gap={0.5}>
+                        <Heading level={2}>
+                          {isEn ? 'Recent 3D Crafting Tickets' : 'Phiếu Chế Tác 3D Mới Tiếp Nhận'}
+                        </Heading>
+                        <Text type="supporting">
+                          {isEn
+                            ? 'Click "Inspect 3D" on any order to open the 3D workstation drawer.'
+                            : 'Bấm "Mở phiếu 3D" trên từng đơn hàng để kiểm tra mô hình 3D và danh sách vỏ sò cần đính.'}
+                        </Text>
+                      </VStack>
+                      <Button
+                        label={isEn ? 'View All Orders' : 'Xem tất cả đơn hàng'}
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setActiveTab('orders')}
+                      />
+                    </HStack>
+
+                    <Table
+                      data={filteredOrders.slice(0, 5)}
+                      columns={orderColumns}
+                      idKey="orderCode"
+                      density="balanced"
+                      hasHover
                     />
-                  </StackItem>
+                  </VStack>
+                </VStack>
+              )}
 
-                  <Selector
-                    label={isEn ? 'Material Group' : 'Nhóm phụ kiện'}
-                    value={materialTypeFilter}
-                    onChange={setMaterialTypeFilter}
-                    width={220}
-                    options={[
-                      { value: 'all', label: isEn ? 'All groups' : 'Tất cả nhóm phụ kiện' },
-                      { value: 'shell', label: 'Vỏ sò (Shell)' },
-                      { value: 'snail', label: 'Ốc biển (Snail)' },
-                      { value: 'charm', label: 'Charm biển (Charm)' },
-                      { value: 'bead', label: 'Ngọc trai / Hạt (Bead)' },
-                      { value: 'cord', label: 'Nút dây lưới (Cord)' },
-                    ]}
+              {/* =========================================================== */}
+              {/* VIEW 2: ORDERS & 3D CRAFTING INSPECTOR                      */}
+              {/* =========================================================== */}
+              {activeTab === 'orders' && (
+                <VStack gap={5}>
+                  <HStack gap={3} vAlign="end" wrap="wrap">
+                    <StackItem size="fill">
+                      <TextInput
+                        type="search"
+                        label={isEn ? 'Search orders' : 'Tìm kiếm đơn hàng'}
+                        value={orderSearch}
+                        onChange={setOrderSearch}
+                        placeholder={
+                          isEn
+                            ? 'Order code DTU-..., customer name, or phone...'
+                            : 'Nhập mã đơn DTU-..., tên khách hàng hoặc SĐT...'
+                        }
+                        startIcon="search"
+                        hasClear
+                        width="100%"
+                      />
+                    </StackItem>
+
+                    <Selector
+                      label={isEn ? 'Crafting Stage' : 'Lọc theo tiến độ chế tác'}
+                      value={orderStatusFilter}
+                      onChange={setOrderStatusFilter}
+                      width={240}
+                      options={[
+                        { value: 'all', label: isEn ? 'All stages (7)' : 'Tất cả trạng thái (7)' },
+                        { value: 'pending', label: t('status.pending') },
+                        { value: 'confirmed', label: t('status.confirmed') },
+                        { value: 'in_crafting', label: t('status.in_crafting') },
+                        { value: 'quality_check', label: t('status.quality_check') },
+                        { value: 'shipping', label: t('status.shipping') },
+                        { value: 'delivered', label: t('status.delivered') },
+                        { value: 'cancelled', label: t('status.cancelled') },
+                      ]}
+                    />
+
+                    {(orderSearch || orderStatusFilter !== 'all') && (
+                      <Button
+                        label={isEn ? 'Reset' : 'Xóa lọc'}
+                        variant="ghost"
+                        onClick={() => {
+                          setOrderSearch('');
+                          setOrderStatusFilter('all');
+                        }}
+                      />
+                    )}
+                  </HStack>
+
+                  {filteredOrders.length === 0 ? (
+                    <EmptyState
+                      title={isEn ? 'No matching orders found' : 'Không tìm thấy đơn hàng phù hợp'}
+                      description={
+                        isEn
+                          ? 'Try clearing your search query or status filter.'
+                          : 'Hãy thử xóa từ khóa tìm kiếm hoặc chọn lại bộ lọc trạng thái.'
+                      }
+                      actions={
+                        <Button
+                          label={isEn ? 'Reset Filters' : 'Đặt lại bộ lọc'}
+                          variant="secondary"
+                          onClick={() => {
+                            setOrderSearch('');
+                            setOrderStatusFilter('all');
+                          }}
+                        />
+                      }
+                    />
+                  ) : (
+                    <Table
+                      data={filteredOrders}
+                      columns={orderColumns}
+                      idKey="orderCode"
+                      density="balanced"
+                      hasHover
+                    />
+                  )}
+                </VStack>
+              )}
+
+              {/* =========================================================== */}
+              {/* VIEW 3: PRODUCTS & CLOUDINARY IMAGES                        */}
+              {/* =========================================================== */}
+              {activeTab === 'products' && (
+                <VStack gap={5}>
+                  <HStack gap={3} vAlign="end" wrap="wrap">
+                    <StackItem size="fill">
+                      <TextInput
+                        type="search"
+                        label={isEn ? 'Search products' : 'Tìm kiếm sản phẩm'}
+                        value={productSearch}
+                        onChange={setProductSearch}
+                        placeholder={
+                          isEn
+                            ? 'Search product by name...'
+                            : 'Nhập tên túi lưới, giỏ, ví, vòng tay...'
+                        }
+                        startIcon="search"
+                        hasClear
+                        width="100%"
+                      />
+                    </StackItem>
+
+                    <Selector
+                      label={isEn ? 'Category' : 'Danh mục sản phẩm'}
+                      value={productCatFilter}
+                      onChange={setProductCatFilter}
+                      width={220}
+                      options={[
+                        { value: 'all', label: t('categories.all') },
+                        { value: 'bag', label: t('categories.bag') },
+                        { value: 'basket', label: t('categories.basket') },
+                        { value: 'wallet', label: t('categories.wallet') },
+                        { value: 'apparel', label: t('categories.apparel') },
+                        { value: 'bracelet', label: t('categories.bracelet') },
+                        { value: 'accessory', label: t('categories.accessory') },
+                      ]}
+                    />
+                  </HStack>
+
+                  <Table
+                    data={filteredProducts}
+                    columns={productColumns}
+                    idKey="_id"
+                    density="balanced"
+                    hasHover
                   />
-                </HStack>
+                </VStack>
+              )}
 
-                <Table
-                  data={filteredMaterials}
-                  columns={materialColumns}
-                  idKey="_id"
-                  density="balanced"
-                  hasHover
-                />
-              </VStack>
-            </Section>
-          )}
-        </VStack>
+              {/* =========================================================== */}
+              {/* VIEW 4: MATERIALS BOM INVENTORY                             */}
+              {/* =========================================================== */}
+              {activeTab === 'materials' && (
+                <VStack gap={5}>
+                  <HStack gap={3} vAlign="end" wrap="wrap">
+                    <StackItem size="fill">
+                      <TextInput
+                        type="search"
+                        label={isEn ? 'Search shells, snails, charms' : 'Tìm kiếm nguyên liệu BOM'}
+                        value={materialSearch}
+                        onChange={setMaterialSearch}
+                        placeholder={
+                          isEn
+                            ? 'Search scallop shell, spiral snail, starfish...'
+                            : 'Tìm vỏ sò điệp, ốc xoắn, sao biển...'
+                        }
+                        startIcon="search"
+                        hasClear
+                        width="100%"
+                      />
+                    </StackItem>
+
+                    <Selector
+                      label={isEn ? 'Material Group' : 'Nhóm phụ kiện'}
+                      value={materialTypeFilter}
+                      onChange={setMaterialTypeFilter}
+                      width={220}
+                      options={[
+                        { value: 'all', label: isEn ? 'All groups' : 'Tất cả nhóm phụ kiện' },
+                        { value: 'shell', label: 'Vỏ sò (Shell)' },
+                        { value: 'snail', label: 'Ốc biển (Snail)' },
+                        { value: 'charm', label: 'Charm biển (Charm)' },
+                        { value: 'bead', label: 'Ngọc trai / Hạt (Bead)' },
+                        { value: 'cord', label: 'Nút dây lưới (Cord)' },
+                      ]}
+                    />
+                  </HStack>
+
+                  <Table
+                    data={filteredMaterials}
+                    columns={materialColumns}
+                    idKey="_id"
+                    density="balanced"
+                    hasHover
+                  />
+                </VStack>
+              )}
+            </LayoutContent>
+          }
+        />
       </AppShell>
 
       {/* =================================================================== */}
-      {/* ASTRYX DRAWER: 3D CRAFTING INSPECTOR WORKSTATION (BR-07 & BR-05)    */}
+      {/* ASTRYX DRAWER: 3D CRAFTING INSPECTOR WORKSTATION (Pure Astryx UI)   */}
       {/* =================================================================== */}
       <Drawer
         isOpen={isInspectorOpen}
         onOpenChange={setIsInspectorOpen}
         label={isEn ? '3D Crafting Inspector Workstation' : 'Máy trạm chế tác 3D Inspector'}
-        width={820}
+        width={760}
       >
         <Layout
           header={
             <DrawerHeader
               title={
                 inspectedOrder
-                  ? `${isEn ? '3D Ticket:' : 'Phiếu chế tác:'} ${inspectedOrder.orderCode}`
+                  ? `${isEn ? '3D Crafting Ticket:' : 'Phiếu chế tác 3D:'} ${inspectedOrder.orderCode}`
                   : isEn
                   ? '3D Crafting Inspector'
                   : 'Máy Trạm Chế Tác 3D'
@@ -1535,29 +1557,96 @@ export default function AdminCmsPage() {
                   ? `${inspectedOrder.customerInfo.fullName} • ${inspectedOrder.customerInfo.phone}`
                   : undefined
               }
+              endContent={
+                inspectedStatusInfo ? (
+                  <Badge
+                    variant={inspectedStatusInfo.badgeVariant}
+                    label={inspectedStatusInfo.label}
+                  />
+                ) : undefined
+              }
               onOpenChange={setIsInspectorOpen}
             />
           }
           content={
             <LayoutContent>
               {inspectedOrder && (
-                <VStack gap={4}>
-                  <OrderStatusStepper
-                    currentStatus={inspectedOrder.status}
-                    interactive={true}
-                    onStatusChange={(nextStatus) => handleStepOrderStatus(inspectedOrder, nextStatus)}
-                    updatedAt={inspectedOrder.updatedAt}
-                  />
+                <VStack gap={5}>
+                  {/* Pure Astryx Crafting Stage Progress & Step Selector */}
+                  <Card>
+                    <VStack gap={3}>
+                      <ProgressBar
+                        label={isEn ? 'Crafting Progress (BR-05)' : 'Tiến độ chế tác đơn hàng (BR-05)'}
+                        value={inspectedStatusInfo?.progressPct || 0}
+                        max={100}
+                        hasValueLabel
+                        variant={inspectedOrder.status === 'delivered' ? 'success' : 'accent'}
+                      />
+                      <HStack gap={1.5} wrap="wrap">
+                        {ORDER_STAGE_STEPS.map((st) => {
+                          const info = getOrderStatusInfo(st, isEn);
+                          const isCurrent = inspectedOrder.status === st;
+                          return (
+                            <Button
+                              key={st}
+                              label={info.label}
+                              variant={isCurrent ? 'primary' : 'secondary'}
+                              size="sm"
+                              onClick={() => handleStepOrderStatus(inspectedOrder, st)}
+                            />
+                          );
+                        })}
+                      </HStack>
+                    </VStack>
+                  </Card>
+
+                  {/* Customer & Order MetadataList */}
+                  <MetadataList columns={2}>
+                    <MetadataListItem label={isEn ? 'Customer' : 'Khách hàng'}>
+                      {inspectedOrder.customerInfo.fullName} ({inspectedOrder.customerInfo.phone})
+                    </MetadataListItem>
+                    <MetadataListItem label={isEn ? 'Shipping Address' : 'Địa chỉ giao hàng'}>
+                      {inspectedOrder.customerInfo.address}
+                    </MetadataListItem>
+                    <MetadataListItem label={isEn ? 'Total Amount' : 'Tổng thanh toán'}>
+                      <Text weight="semibold" hasTabularNumbers>
+                        {formatVnd(inspectedOrder.finalAmount)} ({inspectedOrder.paymentMethod.toUpperCase()})
+                      </Text>
+                    </MetadataListItem>
+                    <MetadataListItem label={isEn ? 'Payment Status' : 'Trạng thái thu tiền'}>
+                      <Button
+                        label={
+                          inspectedOrder.paymentStatus === 'paid'
+                            ? isEn
+                              ? 'Paid — Click to toggle'
+                              : 'Đã thu tiền (Chạm để đổi)'
+                            : isEn
+                            ? 'Unpaid — Click to mark paid'
+                            : 'Chưa thu tiền (Bấm xác nhận thu)'
+                        }
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => handleTogglePayment(inspectedOrder)}
+                      />
+                    </MetadataListItem>
+                  </MetadataList>
 
                   {inspectedCustomItem && inspectedCustomItem.customDesignSnapshot ? (
                     <VStack gap={4}>
+                      <Heading level={3}>
+                        {isEn
+                          ? 'Interactive 3D Blueprint & Shell Coordinates'
+                          : 'Mô hình 3D & Tọa độ đính Vỏ sò / Ốc biển'}
+                      </Heading>
+
                       <div
                         style={{
-                          height: 360,
+                          height: 340,
                           width: '100%',
                           borderRadius: 12,
                           overflow: 'hidden',
                           border: '1px solid var(--color-border)',
+                          background: 'var(--color-background-surface)',
                         }}
                       >
                         <ThreeCanvasViewer
@@ -1582,37 +1671,92 @@ export default function AdminCmsPage() {
                           container="card"
                           collapsible={false}
                           title={
-                            isEn ? 'Customer note for artisan' : 'Ghi chú của khách cho nghệ nhân'
+                            isEn ? 'Customer Note for Artisan' : 'Ghi chú của khách cho nghệ nhân'
                           }
                           description={inspectedCustomItem.customDesignSnapshot.artisanNote}
                         />
                       )}
 
-                      <BomPriceBreakdownCard
-                        variant="crafting_checklist"
-                        baseProductName={inspectedCustomItem.productName}
-                        basePrice={inspectedCustomItem.customDesignSnapshot.basePrice}
-                        craftFee={inspectedCustomItem.customDesignSnapshot.craftFee}
-                        placements={inspectedCustomItem.customDesignSnapshot.placements}
-                        quantity={inspectedCustomItem.quantity}
-                        checkedMaterialIds={checkedMaterialIds}
-                        onToggleChecklist={(matId) => {
-                          setCheckedMaterialIds((prev) =>
-                            prev.includes(matId)
-                              ? prev.filter((id) => id !== matId)
-                              : [...prev, matId]
-                          );
-                        }}
-                      />
+                      {/* Pure Astryx BOM Checklist */}
+                      <Card>
+                        <VStack gap={3}>
+                          <HStack gap={2} vAlign="center" hAlign="between">
+                            <Heading level={4}>
+                              {isEn
+                                ? 'Artisan BOM Attachment Checklist'
+                                : 'Checklist phụ kiện Vỏ sò / Ốc cần đính (BOM)'}
+                            </Heading>
+                            <Badge
+                              variant="neutral"
+                              label={`${checkedPlacementIds.length}/${inspectedCustomItem.customDesignSnapshot.placements.length}`}
+                            />
+                          </HStack>
+
+                          <Divider />
+
+                          <VStack gap={2}>
+                            {inspectedCustomItem.customDesignSnapshot.placements.map((pl, idx) => {
+                              const isChecked = checkedPlacementIds.includes(pl.placementId);
+                              return (
+                                <HStack
+                                  key={pl.placementId}
+                                  gap={3}
+                                  vAlign="center"
+                                  hAlign="between"
+                                >
+                                  <CheckboxInput
+                                    label={`#${idx + 1} ${pl.materialName}`}
+                                    description={`Tọa độ 3D: (${pl.position
+                                      .map((n) => n.toFixed(2))
+                                      .join(', ')}) • Góc xoay: ${pl.rotation}° • Tỉ lệ: ${pl.scale}x`}
+                                    value={isChecked}
+                                    onChange={(checked) => {
+                                      setSelectedInspectorPlacementId(pl.placementId);
+                                      setCheckedPlacementIds((prev) =>
+                                        checked
+                                          ? [...prev, pl.placementId]
+                                          : prev.filter((id) => id !== pl.placementId)
+                                      );
+                                    }}
+                                  />
+                                  <Text type="code" hasTabularNumbers>
+                                    +{formatVnd(pl.unitPrice)}
+                                  </Text>
+                                </HStack>
+                              );
+                            })}
+                          </VStack>
+
+                          <Divider />
+
+                          <MetadataList columns={3}>
+                            <MetadataListItem label={isEn ? 'Base Blank' : 'Giá phôi lưới'}>
+                              {formatVnd(inspectedCustomItem.customDesignSnapshot.basePrice)}
+                            </MetadataListItem>
+                            <MetadataListItem label={isEn ? '3D Craft Fee' : 'Phí khâu 3D'}>
+                              +{formatVnd(inspectedCustomItem.customDesignSnapshot.craftFee)}
+                            </MetadataListItem>
+                            <MetadataListItem label={isEn ? 'BOM Materials' : 'Tổng phụ kiện'}>
+                              +{formatVnd(inspectedCustomItem.customDesignSnapshot.materialsTotal)}
+                            </MetadataListItem>
+                          </MetadataList>
+                        </VStack>
+                      </Card>
                     </VStack>
                   ) : (
-                    <Card variant="muted">
-                      <Text type="supporting">
-                        {isEn
-                          ? 'This order contains standard ready-made blanks (no 3D shell attachments).'
-                          : 'Đơn hàng này gồm các sản phẩm phôi tiêu chuẩn (không đính phụ kiện Chế tác 3D).'}
-                      </Text>
-                    </Card>
+                    <EmptyState
+                      isCompact
+                      title={
+                        isEn
+                          ? 'Standard Ready-Made Product Blank'
+                          : 'Đơn hàng phôi tiêu chuẩn (Không đính phụ kiện 3D)'
+                      }
+                      description={
+                        isEn
+                          ? 'This order does not include custom 3D shell attachments.'
+                          : 'Khách đặt phôi tiêu chuẩn, nghệ nhân có thể chuyển thẳng sang bước kiểm định QC & đóng gói.'
+                      }
+                    />
                   )}
                 </VStack>
               )}
@@ -1622,7 +1766,7 @@ export default function AdminCmsPage() {
             <LayoutFooter>
               <HStack gap={2} hAlign="end">
                 <Button
-                  label={isEn ? 'Close Workstation' : 'Đóng máy trạm'}
+                  label={isEn ? 'Close' : 'Đóng'}
                   variant="secondary"
                   onClick={() => setIsInspectorOpen(false)}
                 />
@@ -1630,9 +1774,9 @@ export default function AdminCmsPage() {
                   <Button
                     label={
                       isEn
-                        ? `Advance to "${NEXT_ORDER_STATUS[inspectedOrder.status]}"`
-                        : `Chuyển sang bước "${
-                            getOrderStatusBadge(
+                        ? `Advance to Next Stage`
+                        : `Chuyển sang "${
+                            getOrderStatusInfo(
                               NEXT_ORDER_STATUS[inspectedOrder.status] as OrderStatus,
                               false
                             ).label
@@ -1675,16 +1819,15 @@ export default function AdminCmsPage() {
               }
               subtitle={
                 isEn
-                  ? 'Product image is stored in the `image` field and uploaded to Cloudinary.'
-                  : 'Trường hình ảnh (`image`) của sản phẩm được đồng bộ trực tiếp với Cloudinary.'
+                  ? 'Product image is stored in the `image` field and uploaded directly to Cloudinary.'
+                  : 'Trường hình ảnh (`image`) của sản phẩm được đồng bộ trực tiếp lên Cloudinary.'
               }
               onOpenChange={setIsProductModalOpen}
             />
           }
           content={
             <LayoutContent>
-              <VStack gap={4}>
-                {/* Cloudinary Image Uploader Field */}
+              <FormLayout defaultOptionality="required">
                 <S3ImageUploader
                   folder="products"
                   label={
@@ -1696,7 +1839,7 @@ export default function AdminCmsPage() {
                   onChange={(newUrl) => setProdForm({ ...prodForm, imageUrl: newUrl })}
                 />
 
-                <Grid columns={2} gap={3}>
+                <FormLayout direction="horizontal">
                   <TextInput
                     label={isEn ? 'Product Name' : 'Tên sản phẩm'}
                     isRequired
@@ -1714,7 +1857,9 @@ export default function AdminCmsPage() {
                     placeholder="tui-xach-luoi-dai-duong-son-tra"
                     width="100%"
                   />
+                </FormLayout>
 
+                <FormLayout direction="horizontal">
                   <Selector
                     label={isEn ? 'Category' : 'Danh mục'}
                     value={prodForm.category}
@@ -1733,7 +1878,7 @@ export default function AdminCmsPage() {
                   />
 
                   <Selector
-                    label="Mesh Preset 3D (BR-09)"
+                    label="Mesh Preset 3D"
                     value={prodForm.meshPreset}
                     onChange={(val) => setProdForm({ ...prodForm, meshPreset: val })}
                     width="100%"
@@ -1746,7 +1891,9 @@ export default function AdminCmsPage() {
                       { value: 'shell_charm_holder', label: 'shell_charm_holder (Móc khóa phao)' },
                     ]}
                   />
+                </FormLayout>
 
+                <FormLayout direction="horizontal">
                   <NumberInput
                     label={isEn ? 'Base Price' : 'Giá phôi gốc'}
                     value={prodForm.basePrice}
@@ -1768,7 +1915,9 @@ export default function AdminCmsPage() {
                     isWheelEnabled={false}
                     width="100%"
                   />
+                </FormLayout>
 
+                <FormLayout direction="horizontal">
                   <NumberInput
                     label={isEn ? 'Blank Stock' : 'Tồn kho phôi'}
                     value={prodForm.stock}
@@ -1791,13 +1940,13 @@ export default function AdminCmsPage() {
                     isWheelEnabled={false}
                     width="100%"
                   />
-                </Grid>
+                </FormLayout>
 
                 <TextInput
                   label={
                     isEn
-                      ? 'External 3D .glb URL (Optional — BR-09)'
-                      : 'Đường dẫn file 3D .glb ngoài (Tùy chọn — BR-09)'
+                      ? 'External 3D .glb URL'
+                      : 'Đường dẫn file 3D .glb ngoài'
                   }
                   isOptional
                   value={prodForm.glbUrl}
@@ -1808,6 +1957,7 @@ export default function AdminCmsPage() {
 
                 <TextArea
                   label={isEn ? 'Short Description' : 'Mô tả ngắn sản phẩm'}
+                  isOptional
                   value={prodForm.shortDescription}
                   onChange={(val) => setProdForm({ ...prodForm, shortDescription: val })}
                   rows={2}
@@ -1823,7 +1973,7 @@ export default function AdminCmsPage() {
                   value={prodForm.isCustomizable}
                   onChange={(checked) => setProdForm({ ...prodForm, isCustomizable: checked })}
                 />
-              </VStack>
+              </FormLayout>
             </LayoutContent>
           }
           footer={
@@ -1872,7 +2022,7 @@ export default function AdminCmsPage() {
           }
           content={
             <LayoutContent>
-              <VStack gap={4}>
+              <FormLayout defaultOptionality="required">
                 <S3ImageUploader
                   folder="materials"
                   compact
@@ -1885,7 +2035,7 @@ export default function AdminCmsPage() {
                   onChange={(newUrl) => setMatForm({ ...matForm, thumbnail: newUrl })}
                 />
 
-                <Grid columns={2} gap={3}>
+                <FormLayout direction="horizontal">
                   <TextInput
                     label={isEn ? 'Material Name' : 'Tên vỏ sò / ốc / charm'}
                     isRequired
@@ -1909,7 +2059,9 @@ export default function AdminCmsPage() {
                       { value: 'cord', label: 'Nút dây lưới (cord)' },
                     ]}
                   />
+                </FormLayout>
 
+                <FormLayout direction="horizontal">
                   <Selector
                     label="Mesh Preset 3D"
                     value={matForm.meshPreset}
@@ -1927,6 +2079,15 @@ export default function AdminCmsPage() {
                     ]}
                   />
 
+                  <TextInput
+                    label={isEn ? 'Color Hex' : 'Mã màu Hex 3D'}
+                    value={matForm.colorHex}
+                    onChange={(val) => setMatForm({ ...matForm, colorHex: val })}
+                    width="100%"
+                  />
+                </FormLayout>
+
+                <FormLayout direction="horizontal">
                   <NumberInput
                     label={isEn ? 'Unit Price' : 'Đơn giá đính 3D'}
                     value={matForm.unitPrice}
@@ -1939,7 +2100,7 @@ export default function AdminCmsPage() {
                   />
 
                   <NumberInput
-                    label={isEn ? 'Stock Quantity (BR-04)' : 'Số lượng tồn kho (BR-04)'}
+                    label={isEn ? 'Stock Quantity (BOM)' : 'Số lượng tồn kho (BOM)'}
                     value={matForm.stockQuantity}
                     onChange={(val) => setMatForm({ ...matForm, stockQuantity: val ?? 0 })}
                     min={0}
@@ -1949,15 +2110,8 @@ export default function AdminCmsPage() {
                     isWheelEnabled={false}
                     width="100%"
                   />
-
-                  <TextInput
-                    label={isEn ? 'Color Hex' : 'Mã màu Hex 3D'}
-                    value={matForm.colorHex}
-                    onChange={(val) => setMatForm({ ...matForm, colorHex: val })}
-                    width="100%"
-                  />
-                </Grid>
-              </VStack>
+                </FormLayout>
+              </FormLayout>
             </LayoutContent>
           }
           footer={

@@ -36,11 +36,6 @@ export function S3ImageUploader({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [storageMode, setStorageMode] = useState<'cloudinary' | 'local-fallback' | null>(
-    value?.includes('res.cloudinary.com') || value?.includes('cloudinary.com')
-      ? 'cloudinary'
-      : null
-  );
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
 
   const resolvedPreview = resolveAssetUrl(value, ASSETS.placeholders.product);
@@ -52,11 +47,8 @@ export function S3ImageUploader({
     try {
       const result = await uploadMediaFile(file, folder);
       onChange(result.url);
-      setStorageMode(result.storageMode);
       setUploadNotice(
-        isEn
-          ? `Uploaded to ${result.storageMode === 'cloudinary' ? 'Cloudinary' : 'Media Storage'}`
-          : `Đã tải ảnh lên ${result.storageMode === 'cloudinary' ? 'Cloudinary' : 'Kho lưu trữ'}`
+        isEn ? 'Uploaded to Cloudinary' : 'Đã tải ảnh lên Cloudinary thành công'
       );
       setTimeout(() => setUploadNotice(null), 3500);
     } finally {
@@ -77,9 +69,7 @@ export function S3ImageUploader({
   };
 
   const isCloudinaryUrl =
-    storageMode === 'cloudinary' ||
-    value?.includes('res.cloudinary.com') ||
-    value?.includes('cloudinary.com');
+    value?.includes('res.cloudinary.com') || value?.includes('cloudinary.com');
 
   return (
     <div
@@ -101,19 +91,15 @@ export function S3ImageUploader({
             </Text>
             <Badge
               variant={isCloudinaryUrl ? 'blue' : 'neutral'}
-              label={
-                isCloudinaryUrl
-                  ? `Cloudinary • ${folder}`
-                  : `Cloudinary Media • ${folder}`
-              }
+              label={`Cloudinary • ${folder}`}
             />
           </HStack>
 
           <HStack gap={3} vAlign="start" wrap="wrap">
             <div
               style={{
-                width: compact ? 88 : 120,
-                height: compact ? 88 : 100,
+                width: compact ? 84 : 112,
+                height: compact ? 84 : 112,
                 borderRadius: 10,
                 overflow: 'hidden',
                 flexShrink: 0,
@@ -143,10 +129,10 @@ export function S3ImageUploader({
                     label={
                       isUploading
                         ? isEn
-                          ? 'Uploading to Cloudinary...'
-                          : 'Đang tải lên Cloudinary...'
+                          ? 'Uploading...'
+                          : 'Đang tải lên...'
                         : isEn
-                        ? 'Upload Image to Cloudinary'
+                        ? 'Upload to Cloudinary'
                         : 'Tải ảnh lên Cloudinary'
                     }
                     variant="secondary"
@@ -157,7 +143,7 @@ export function S3ImageUploader({
                   />
                   {value && (
                     <Button
-                      label={isEn ? 'Open original' : 'Mở ảnh gốc'}
+                      label={isEn ? 'View Original' : 'Xem ảnh gốc'}
                       variant="ghost"
                       size="sm"
                       icon={<Icon icon="externalLink" />}
@@ -172,11 +158,11 @@ export function S3ImageUploader({
                 <TextInput
                   type="url"
                   size="sm"
-                  label={isEn ? 'Direct Image URL (Cloudinary / CDN)' : 'Đường dẫn URL hình ảnh (Cloudinary / CDN)'}
+                  label={isEn ? 'Cloudinary Image URL' : 'Đường dẫn URL hình ảnh Cloudinary'}
                   isLabelHidden
                   value={value || ''}
                   onChange={(val) => onChange(val)}
-                  placeholder="https://res.cloudinary.com/<cloud_name>/image/upload/..."
+                  placeholder="https://res.cloudinary.com/fbemz6fi/image/upload/..."
                   hasClear
                   width="100%"
                 />
@@ -184,8 +170,8 @@ export function S3ImageUploader({
                 {!compact && (
                   <Text type="supporting">
                     {isEn
-                      ? 'Drag & drop an image file here or click Upload to store directly on Cloudinary (/api/media/upload).'
-                      : 'Kéo thả tệp ảnh vào khung này hoặc bấm nút tải lên để lưu trực tiếp lên Cloudinary (/api/media/upload).'}
+                      ? 'Drag & drop an image file here or click Upload to store directly on Cloudinary.'
+                      : 'Kéo thả tệp ảnh vào khung này hoặc bấm nút tải lên để lưu trực tiếp lên Cloudinary.'}
                   </Text>
                 )}
               </VStack>

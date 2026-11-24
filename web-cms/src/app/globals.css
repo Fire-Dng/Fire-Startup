@@ -1,71 +1,13 @@
-@layer reset, theme, base, astryx-base, astryx-theme, tw-preflight, components, utilities;
-
 @import "@astryxdesign/core/reset.css";
 @import "@astryxdesign/core/astryx.css";
 @import "@astryxdesign/theme-neutral/theme.css";
-
-@layer tw-preflight {
-  @tailwind base;
-}
-@tailwind components;
-@tailwind utilities;
-
-:root {
-  /* ==========================================================================
-   * 1. Ocean Craft Palette Variables (for 3D Canvas & Legacy Subcomponents)
-   * ========================================================================== */
-  --coastal-bg: #F6FBFF;
-  --coastal-mist: #ECF8FF;
-  --coastal-card: #FFFFFF;
-  --coastal-sand: #E0F2FE;
-  --coastal-stone: #D1FAE5;
-  --coastal-deep: #064E3B;
-  --coastal-forest: #0369A1;
-  --coastal-ink: #0A1317;
-  --coastal-slate: #334155;
-  --coastal-muted: #4E606F;
-  --coastal-sub: #64748B;
-  --coastal-cream: #FFFFFF;
-  --coastal-foam: #E0F2FE;
-  --coastal-line: #BAE6FD;
-  --coastal-border: #A7F3D0;
-  --coastal-kelp: #0284C7;
-  --coastal-kelp-hover: #0369A1;
-  --coastal-kelp-light: #0EA5E9;
-  --coastal-rust: #10B981;
-  --coastal-rust-hover: #059669;
-  --coastal-gold: #06B6D4;
-  --coastal-gold-light: #34D399;
-
-  --color-coastal-bg: var(--coastal-bg);
-  --color-coastal-mist: var(--coastal-mist);
-  --color-coastal-card: var(--coastal-card);
-  --color-coastal-sand: var(--coastal-sand);
-  --color-coastal-stone: var(--coastal-stone);
-  --color-coastal-deep: var(--coastal-deep);
-  --color-coastal-forest: var(--coastal-forest);
-  --color-coastal-ink: var(--coastal-ink);
-  --color-coastal-slate: var(--coastal-slate);
-  --color-coastal-muted: var(--coastal-muted);
-  --color-coastal-sub: var(--coastal-sub);
-  --color-coastal-cream: var(--coastal-cream);
-  --color-coastal-foam: var(--coastal-foam);
-  --color-coastal-line: var(--coastal-line);
-  --color-coastal-border: var(--coastal-border);
-  --color-coastal-kelp: var(--coastal-kelp);
-  --color-coastal-kelp-hover: var(--coastal-kelp-hover);
-  --color-coastal-kelp-light: var(--coastal-kelp-light);
-  --color-coastal-rust: var(--coastal-rust);
-  --color-coastal-rust-hover: var(--coastal-rust-hover);
-  --color-coastal-gold: var(--coastal-gold);
-  --color-coastal-gold-light: var(--coastal-gold-light);
-}
 
 html {
   scroll-behavior: smooth;
 }
 
 body {
+  margin: 0;
   font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   -webkit-font-smoothing: antialiased;
