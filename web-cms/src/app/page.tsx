@@ -1,21 +1,44 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { AppHeader } from '@/components/layout/AppHeader';
-import { AppFooter } from '@/components/layout/AppFooter';
+import { Theme } from '@astryxdesign/core/theme';
+import { AppShell } from '@astryxdesign/core/AppShell';
+import { TopNav, TopNavHeading } from '@astryxdesign/core/TopNav';
+import { SideNav, SideNavHeading, SideNavSection, SideNavItem } from '@astryxdesign/core/SideNav';
+import { Layout, LayoutHeader, LayoutContent, LayoutFooter } from '@astryxdesign/core/Layout';
+import { Section } from '@astryxdesign/core/Section';
+import { Card } from '@astryxdesign/core/Card';
+import { Grid } from '@astryxdesign/core/Grid';
+import { VStack } from '@astryxdesign/core/VStack';
+import { HStack } from '@astryxdesign/core/HStack';
+import { StackItem } from '@astryxdesign/core/Stack';
+import { Divider } from '@astryxdesign/core/Divider';
+import { Heading } from '@astryxdesign/core/Heading';
+import { Text } from '@astryxdesign/core/Text';
+import { Badge } from '@astryxdesign/core/Badge';
+import { StatusDot } from '@astryxdesign/core/StatusDot';
+import { Banner } from '@astryxdesign/core/Banner';
+import { Button } from '@astryxdesign/core/Button';
+import { Icon } from '@astryxdesign/core/Icon';
+import { TextInput } from '@astryxdesign/core/TextInput';
+import { NumberInput } from '@astryxdesign/core/NumberInput';
+import { TextArea } from '@astryxdesign/core/TextArea';
+import { Selector } from '@astryxdesign/core/Selector';
+import { Switch } from '@astryxdesign/core/Switch';
+import { SegmentedControl, SegmentedControlItem } from '@astryxdesign/core/SegmentedControl';
+import { Table, proportional, pixel, type TableColumn } from '@astryxdesign/core/Table';
+import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog';
+import { AlertDialog } from '@astryxdesign/core/AlertDialog';
+import { Drawer, DrawerHeader } from '@astryxdesign/core/Drawer';
+
+import { themes, defaultThemeSlug } from '@/astryx-themes';
 import { ThreeCanvasViewer } from '@/components/three/ThreeCanvasViewer';
 import { BomPriceBreakdownCard } from '@/components/common/BomPriceBreakdownCard';
-import { EcoImpactBadge } from '@/components/common/EcoImpactBadge';
 import { OrderStatusStepper } from '@/components/common/OrderStatusStepper';
-import { FilterToolbar } from '@/components/common/FilterToolbar';
 import { S3ImageUploader } from '@/components/common/S3ImageUploader';
-import { DataTable, DataTableColumn } from '@/components/ui/DataTable';
-import { StatusBadge } from '@/components/ui/StatusBadge';
-import { PriceTag, formatVnd } from '@/components/ui/PriceTag';
-import { ModalConfirm } from '@/components/ui/ModalConfirm';
-import { AppIcon } from '@/components/ui/AppIcon';
+import { formatVnd } from '@/components/ui/PriceTag';
 import { ASSETS, resolveAssetUrl } from '@/config/assets';
-import { IconName } from '@/config/icons';
+import { ENV } from '@/config/env';
 import { PRODUCT_COLOR_PRESETS } from '@/config/theme';
 import { useI18n } from '@/i18n/I18nContext';
 import {
@@ -46,10 +69,13 @@ import {
 } from '@/types';
 
 type AdminTab = 'dashboard' | 'orders' | 'products' | 'materials';
+type OrderRow = Order & Record<string, unknown>;
+type ProductRow = Product & Record<string, unknown>;
+type MaterialRow = CustomMaterial & Record<string, unknown>;
 
 const DEMO_CRAFTING_ORDER: Order = {
   _id: 'ord-cms-demo-1',
-  orderCode: 'DTU-20261108-8899',
+  orderCode: 'DTU-20261108-OCN1',
   customerInfo: {
     fullName: 'Trần Minh Ngọc',
     phone: '0905888999',
@@ -133,10 +159,39 @@ const DEMO_CRAFTING_ORDER: Order = {
   updatedAt: new Date().toISOString(),
 };
 
+function getOrderStatusBadge(
+  status: OrderStatus,
+  isEn: boolean
+): { label: string; variant: 'neutral' | 'info' | 'success' | 'warning' | 'error' | 'blue' | 'teal' | 'orange' | 'green' } {
+  const map: Record<
+    OrderStatus,
+    { vi: string; en: string; variant: 'neutral' | 'info' | 'success' | 'warning' | 'error' | 'blue' | 'teal' | 'orange' | 'green' }
+  > = {
+    pending: { vi: 'Chờ xác nhận', en: 'Pending', variant: 'warning' },
+    confirmed: { vi: 'Đã xác nhận BOM', en: 'Confirmed', variant: 'blue' },
+    in_crafting: { vi: 'Đang chế tác 3D', en: 'In 3D Crafting', variant: 'orange' },
+    quality_check: { vi: 'Kiểm định QC', en: 'Quality Check', variant: 'teal' },
+    shipping: { vi: 'Đang giao hàng', en: 'Shipping', variant: 'blue' },
+    delivered: { vi: 'Đã hoàn thành', en: 'Delivered', variant: 'green' },
+    cancelled: { vi: 'Đã hủy', en: 'Cancelled', variant: 'error' },
+  };
+  const entry = map[status] || map.pending;
+  return { label: isEn ? entry.en : entry.vi, variant: entry.variant };
+}
+
+const NEXT_ORDER_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
+  pending: 'confirmed',
+  confirmed: 'in_crafting',
+  in_crafting: 'quality_check',
+  quality_check: 'shipping',
+  shipping: 'delivered',
+};
+
 export default function AdminCmsPage() {
-  const { t, locale } = useI18n();
+  const { t, locale, setLocale } = useI18n();
   const isEn = locale === 'en';
 
+  const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light');
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
@@ -154,14 +209,15 @@ export default function AdminCmsPage() {
   const [materialSearch, setMaterialSearch] = useState('');
   const [materialTypeFilter, setMaterialTypeFilter] = useState('all');
 
-  // 3D Crafting Inspector Modal State (BR-07)
-  const [inspectedOrder, setInspectedOrder] = useState<Order | null>(null);
+  // 3D Crafting Inspector Drawer State (BR-07)
+  const [isInspectorOpen, setIsInspectorOpen] = useState(false);
+  const [inspectedOrder, setInspectedOrder] = useState<Order | null>(DEMO_CRAFTING_ORDER);
   const [selectedInspectorPlacementId, setSelectedInspectorPlacementId] = useState<string | null>(
     null
   );
   const [checkedMaterialIds, setCheckedMaterialIds] = useState<string[]>([]);
 
-  // Product Form Modal State
+  // Product Form Dialog State
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [prodForm, setProdForm] = useState({
@@ -180,7 +236,7 @@ export default function AdminCmsPage() {
     isCustomizable: true,
   });
 
-  // Material Form Modal State
+  // Material Form Dialog State
   const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<CustomMaterial | null>(null);
   const [matForm, setMatForm] = useState({
@@ -195,7 +251,7 @@ export default function AdminCmsPage() {
     description: '',
   });
 
-  // Confirm Delete Modal State
+  // Confirm Delete AlertDialog State
   const [deleteTarget, setDeleteTarget] = useState<{
     type: 'product' | 'material';
     id: string;
@@ -204,7 +260,7 @@ export default function AdminCmsPage() {
 
   const notify = (msg: string) => {
     setToastMsg(msg);
-    setTimeout(() => setToastMsg(null), 2800);
+    setTimeout(() => setToastMsg(null), 3500);
   };
 
   useEffect(() => {
@@ -215,10 +271,11 @@ export default function AdminCmsPage() {
       getProducts({ includeInactive: true }),
       getCustomMaterials(),
       getMediaStatus(),
-    ]).then(([, serverOrders, prodList, matList, s3Status]) => {
+    ]).then(([, serverOrders, prodList, matList, cloudStatus]) => {
       if (!mounted) return;
       if (serverOrders && serverOrders.length > 0) {
         setOrders(serverOrders);
+        setInspectedOrder(serverOrders[0]);
       } else {
         try {
           const raw = localStorage.getItem('dtu_recent_orders_v1');
@@ -232,7 +289,7 @@ export default function AdminCmsPage() {
       }
       if (prodList.length > 0) setProducts(prodList);
       if (matList.length > 0) setMaterials(matList);
-      if (s3Status) setMediaStatus(s3Status);
+      if (cloudStatus) setMediaStatus(cloudStatus);
     });
     return () => {
       mounted = false;
@@ -240,39 +297,45 @@ export default function AdminCmsPage() {
   }, []);
 
   // Filtered Lists
-  const filteredOrders = useMemo(() => {
-    return orders.filter((o) => {
-      if (orderStatusFilter !== 'all' && o.status !== orderStatusFilter) return false;
-      if (orderSearch) {
-        const q = orderSearch.toLowerCase();
-        return (
-          o.orderCode.toLowerCase().includes(q) ||
-          o.customerInfo.fullName.toLowerCase().includes(q) ||
-          o.customerInfo.phone.includes(q)
-        );
-      }
-      return true;
-    });
+  const filteredOrders = useMemo<OrderRow[]>(() => {
+    return orders
+      .filter((o) => {
+        if (orderStatusFilter !== 'all' && o.status !== orderStatusFilter) return false;
+        if (orderSearch) {
+          const q = orderSearch.toLowerCase();
+          return (
+            o.orderCode.toLowerCase().includes(q) ||
+            o.customerInfo.fullName.toLowerCase().includes(q) ||
+            o.customerInfo.phone.includes(q)
+          );
+        }
+        return true;
+      })
+      .map((o) => o as OrderRow);
   }, [orders, orderStatusFilter, orderSearch]);
 
-  const filteredProducts = useMemo(() => {
-    return products.filter((p) => {
-      if (productCatFilter !== 'all' && p.category !== productCatFilter) return false;
-      if (productSearch) {
-        return p.name.toLowerCase().includes(productSearch.toLowerCase());
-      }
-      return true;
-    });
+  const filteredProducts = useMemo<ProductRow[]>(() => {
+    return products
+      .filter((p) => {
+        if (productCatFilter !== 'all' && p.category !== productCatFilter) return false;
+        if (productSearch) {
+          return p.name.toLowerCase().includes(productSearch.toLowerCase());
+        }
+        return true;
+      })
+      .map((p) => p as ProductRow);
   }, [products, productCatFilter, productSearch]);
 
-  const filteredMaterials = useMemo(() => {
-    return materials.filter((m) => {
-      if (materialTypeFilter !== 'all' && m.materialType !== materialTypeFilter) return false;
-      if (materialSearch) {
-        return m.name.toLowerCase().includes(materialSearch.toLowerCase());
-      }
-      return true;
-    });
+  const filteredMaterials = useMemo<MaterialRow[]>(() => {
+    return materials
+      .filter((m) => {
+        if (materialTypeFilter !== 'all' && m.materialType !== materialTypeFilter) return false;
+        if (materialSearch) {
+          return m.name.toLowerCase().includes(materialSearch.toLowerCase());
+        }
+        return true;
+      })
+      .map((m) => m as MaterialRow);
   }, [materials, materialTypeFilter, materialSearch]);
 
   // Dashboard Computed KPIs
@@ -342,10 +405,16 @@ export default function AdminCmsPage() {
     );
   };
 
-  // Save Product (Create / Edit)
-  const handleSaveProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const resolvedImg = prodForm.imageUrl || editingProduct?.images?.[0] || ASSETS.placeholders.product;
+  // Save Product (Create / Edit) with explicit `image`, `imageUrl`, `thumbnail`, `images`
+  const handleSaveProduct = async () => {
+    if (!prodForm.name.trim()) return;
+    const resolvedImg =
+      prodForm.imageUrl ||
+      editingProduct?.image ||
+      editingProduct?.imageUrl ||
+      editingProduct?.images?.[0] ||
+      ASSETS.placeholders.product;
+
     const payload: Partial<Product> = {
       name: prodForm.name,
       slug:
@@ -363,8 +432,10 @@ export default function AdminCmsPage() {
       description: prodForm.shortDescription,
       isCustomizable: prodForm.isCustomizable,
       isActive: true,
-      images: [resolvedImg],
+      image: resolvedImg,
+      imageUrl: resolvedImg,
       thumbnail: resolvedImg,
+      images: [resolvedImg],
       model3D: {
         meshPreset: prodForm.meshPreset,
         glbUrl: prodForm.glbUrl,
@@ -403,14 +474,14 @@ export default function AdminCmsPage() {
     setEditingProduct(null);
     notify(
       isEn
-        ? 'Saved product & S3 image configuration.'
-        : 'Đã lưu thông tin sản phẩm & ảnh AWS S3 thành công.'
+        ? 'Saved product & Cloudinary image configuration.'
+        : 'Đã lưu sản phẩm & trường hình ảnh Cloudinary thành công.'
     );
   };
 
   // Save Material (Create / Edit)
-  const handleSaveMaterial = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveMaterial = async () => {
+    if (!matForm.name.trim()) return;
     const payload: Partial<CustomMaterial> = {
       name: matForm.name,
       materialType: matForm.materialType,
@@ -451,8 +522,8 @@ export default function AdminCmsPage() {
     setEditingMaterial(null);
     notify(
       isEn
-        ? 'Updated shell/snail S3 image & BOM inventory.'
-        : 'Đã cập nhật ảnh AWS S3 & kho nguyên liệu vỏ sò / ốc biển thành công.'
+        ? 'Updated shell/snail Cloudinary image & BOM inventory.'
+        : 'Đã cập nhật ảnh Cloudinary & kho nguyên liệu vỏ sò / ốc biển thành công.'
     );
   };
 
@@ -487,160 +558,212 @@ export default function AdminCmsPage() {
     setDeleteTarget(null);
   };
 
-  // DataTable Columns for Orders
-  const orderColumns: DataTableColumn<Order>[] = [
+  // Astryx Table Columns for Orders
+  const orderColumns: TableColumn<OrderRow>[] = [
     {
       key: 'orderCode',
       header: isEn ? 'Order Code & Time' : 'Mã đơn & Thời gian',
-      render: (row) => (
-        <div>
-          <span className="font-mono font-bold text-coastal-kelp">{row.orderCode}</span>
-          <span className="block font-mono text-[11px] text-coastal-slate">
+      width: proportional(1.2, { minWidth: 165 }),
+      renderCell: (row) => (
+        <VStack gap={0.5}>
+          <Text type="code" weight="semibold">
+            {row.orderCode}
+          </Text>
+          <Text type="supporting">
             {new Date(row.createdAt).toLocaleString(isEn ? 'en-US' : 'vi-VN')}
-          </span>
-        </div>
+          </Text>
+        </VStack>
       ),
     },
     {
-      key: 'customer',
+      key: 'customerInfo',
       header: isEn ? 'Customer' : 'Khách hàng',
-      render: (row) => (
-        <div>
-          <div className="font-semibold text-coastal-ink">{row.customerInfo.fullName}</div>
-          <div className="font-mono text-xs text-coastal-slate">{row.customerInfo.phone}</div>
-        </div>
+      width: proportional(1.3, { minWidth: 170 }),
+      renderCell: (row) => (
+        <VStack gap={0.5}>
+          <Text weight="medium">{row.customerInfo.fullName}</Text>
+          <Text type="supporting" hasTabularNumbers>
+            {row.customerInfo.phone}
+          </Text>
+        </VStack>
       ),
     },
     {
-      key: 'type',
+      key: 'items',
       header: isEn ? 'Crafting Type' : 'Loại chế tác',
-      render: (row) => {
+      width: proportional(1, { minWidth: 140 }),
+      renderCell: (row) => {
         const hasCustom = row.items.some((i) => i.isCustom);
         return hasCustom ? (
-          <span className="astryx-pill border-coastal-rust/40 bg-coastal-rust/10 text-coastal-rust">
-            <AppIcon name="compass" className="h-3 w-3" />
-            {isEn ? 'Has 3D Blueprint' : 'Có bản vẽ 3D'}
-          </span>
+          <Badge variant="purple" label={isEn ? '3D Blueprint' : 'Có bản vẽ 3D'} />
         ) : (
-          <span className="astryx-pill bg-coastal-mist text-coastal-slate">
-            {isEn ? 'Standard Blank' : 'Phôi tiêu chuẩn'}
-          </span>
+          <Text type="supporting">{isEn ? 'Standard Blank' : 'Phôi tiêu chuẩn'}</Text>
         );
       },
     },
     {
-      key: 'total',
-      header: isEn ? 'Total Amount' : 'Tổng tiền',
-      align: 'right',
-      render: (row) => (
-        <div className="text-right">
-          <PriceTag amount={row.finalAmount} size="sm" />
-          <div className="mt-0.5">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleTogglePayment(row);
-              }}
-              title={isEn ? 'Click to toggle payment status' : 'Chạm để đổi trạng thái thanh toán'}
-            >
-              <StatusBadge status={row.paymentStatus} size="sm" />
-            </button>
-          </div>
-        </div>
+      key: 'finalAmount',
+      header: isEn ? 'Total & Payment' : 'Tổng tiền & Thanh toán',
+      width: proportional(1.1, { minWidth: 155 }),
+      align: 'end',
+      renderCell: (row) => (
+        <VStack gap={1} hAlign="end">
+          <Text weight="semibold" hasTabularNumbers>
+            {formatVnd(row.finalAmount)}
+          </Text>
+          <Button
+            label={
+              row.paymentStatus === 'paid'
+                ? isEn
+                  ? 'Paid (VietQR)'
+                  : 'Đã thanh toán'
+                : isEn
+                ? 'Unpaid'
+                : 'Chưa thu tiền'
+            }
+            variant="ghost"
+            size="sm"
+            onClick={() => handleTogglePayment(row)}
+          />
+        </VStack>
       ),
     },
     {
       key: 'status',
-      header: isEn ? 'Crafting Status (BR-05)' : 'Trạng thái chế tác (BR-05)',
-      render: (row) => <StatusBadge status={row.status} />,
+      header: isEn ? 'Status (BR-05)' : 'Trạng thái (BR-05)',
+      width: proportional(1.1, { minWidth: 150 }),
+      renderCell: (row) => {
+        const st = getOrderStatusBadge(row.status, isEn);
+        return <Badge variant={st.variant} label={st.label} />;
+      },
     },
     {
-      key: 'actions',
-      header: isEn ? '3D Inspector Workstation' : 'Máy trạm 3D Inspector',
-      align: 'right',
-      render: (row) => (
-        <button
-          type="button"
-          onClick={() => {
-            setInspectedOrder(row);
-            setCheckedMaterialIds([]);
-            setSelectedInspectorPlacementId(null);
-          }}
-          className="astryx-btn-primary px-3.5 py-1.5 text-xs"
-        >
-          <AppIcon name="eye" className="h-3.5 w-3.5" />
-          {isEn ? 'Open 3D Ticket' : 'Mở Phiếu Chế Tác 3D'}
-        </button>
-      ),
+      key: '_id',
+      header: isEn ? '3D Workstation' : 'Máy trạm 3D Inspector',
+      width: pixel(210),
+      align: 'end',
+      renderCell: (row) => {
+        const nextSt = NEXT_ORDER_STATUS[row.status];
+        return (
+          <HStack gap={1.5} hAlign="end" vAlign="center">
+            {nextSt && (
+              <Button
+                label={isEn ? 'Next Step' : 'Bước kế'}
+                variant="secondary"
+                size="sm"
+                onClick={() => handleStepOrderStatus(row, nextSt)}
+              />
+            )}
+            <Button
+              label={isEn ? '3D Ticket' : 'Phiếu 3D'}
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                setInspectedOrder(row);
+                setCheckedMaterialIds([]);
+                setSelectedInspectorPlacementId(null);
+                setIsInspectorOpen(true);
+              }}
+            />
+          </HStack>
+        );
+      },
     },
   ];
 
-  // DataTable Columns for Products
-  const productColumns: DataTableColumn<Product>[] = [
+  // Astryx Table Columns for Products
+  const productColumns: TableColumn<ProductRow>[] = [
     {
       key: 'name',
-      header: isEn ? 'Upcycled Product' : 'Sản phẩm tái chế',
-      render: (row) => (
-        <div className="flex items-center gap-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={resolveAssetUrl(row.images?.[0] || row.thumbnail, ASSETS.placeholders.product)}
-            alt={row.name}
-            className="h-11 w-11 rounded-xl object-cover border border-coastal-line"
-          />
-          <div>
-            <div className="font-semibold text-coastal-ink">{row.name}</div>
-            <div className="text-xs text-coastal-slate">
-              Preset 3D: <code className="font-mono text-coastal-kelp">{row.model3D?.meshPreset}</code>{' '}
-              • {t('eco.ghostNetRecovered')}: {row.ecoImpact?.netWeightGrams}g
+      header: isEn ? 'Product & Cloudinary Image' : 'Sản phẩm & Ảnh Cloudinary',
+      width: proportional(2, { minWidth: 260 }),
+      renderCell: (row) => {
+        const rawImg = row.image || row.imageUrl || row.thumbnail || row.images?.[0];
+        const isCloud = rawImg?.includes('cloudinary.com');
+        return (
+          <HStack gap={3} vAlign="center">
+            <div
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 8,
+                overflow: 'hidden',
+                flexShrink: 0,
+                border: '1px solid var(--color-border)',
+                background: 'var(--color-background-surface)',
+              }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={resolveAssetUrl(rawImg, ASSETS.placeholders.product)}
+                alt={row.name}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              />
             </div>
-          </div>
-        </div>
-      ),
+            <VStack gap={0.5}>
+              <Text weight="semibold">{row.name}</Text>
+              <HStack gap={1.5} vAlign="center" wrap="wrap">
+                <Text type="code">{row.model3D?.meshPreset || 'tote_bag'}</Text>
+                <Text type="supporting">• {row.ecoImpact?.netWeightGrams || 350}g lưới</Text>
+                {isCloud && <Badge variant="blue" label="Cloudinary" />}
+              </HStack>
+            </VStack>
+          </HStack>
+        );
+      },
     },
     {
       key: 'category',
       header: isEn ? 'Category' : 'Danh mục',
-      render: (row) => (
-        <span className="astryx-pill bg-coastal-mist text-coastal-ink">
-          {row.category}
-        </span>
-      ),
+      width: proportional(0.8, { minWidth: 110 }),
+      renderCell: (row) => <Badge variant="neutral" label={row.category} />,
     },
     {
-      key: 'price',
+      key: 'basePrice',
       header: isEn ? 'Base Price & 3D Fee' : 'Giá phôi & Phí khâu 3D',
-      align: 'right',
-      render: (row) => (
-        <div>
-          <PriceTag amount={row.basePrice} size="sm" />
-          <span className="block font-mono text-[11px] text-coastal-slate">
-            {t('bom.craftFeeCompact')} +{formatVnd(row.craftFee)}
-          </span>
-        </div>
+      width: proportional(1.1, { minWidth: 155 }),
+      align: 'end',
+      renderCell: (row) => (
+        <VStack gap={0.5} hAlign="end">
+          <Text weight="semibold" hasTabularNumbers>
+            {formatVnd(row.basePrice)}
+          </Text>
+          <Text type="supporting" hasTabularNumbers>
+            +{formatVnd(row.craftFee)} phí 3D
+          </Text>
+        </VStack>
       ),
     },
     {
       key: 'stock',
       header: isEn ? 'Blank Stock' : 'Tồn kho phôi',
-      align: 'center',
-      render: (row) => (
-        <StatusBadge
-          status={row.stock > 10 ? 'in_stock' : row.stock > 0 ? 'low_stock' : 'out_of_stock'}
-          label={`${row.stock} ${t('common.pieces')}`}
-          size="sm"
-        />
-      ),
+      width: proportional(0.9, { minWidth: 120 }),
+      align: 'end',
+      renderCell: (row) => {
+        if (row.stock <= 0) {
+          return <Badge variant="error" label={isEn ? 'Out of stock' : 'Hết phôi'} />;
+        }
+        if (row.stock <= 10) {
+          return <Badge variant="warning" label={`${row.stock} ${t('common.pieces')}`} />;
+        }
+        return (
+          <Text hasTabularNumbers>
+            {row.stock} {t('common.pieces')}
+          </Text>
+        );
+      },
     },
     {
-      key: 'actions',
+      key: '_id',
       header: isEn ? 'Actions' : 'Thao tác',
-      align: 'right',
-      render: (row) => (
-        <div className="flex items-center justify-end gap-1.5">
-          <button
-            type="button"
+      width: pixel(165),
+      align: 'end',
+      renderCell: (row) => (
+        <HStack gap={1.5} hAlign="end">
+          <Button
+            label={isEn ? 'Edit' : 'Sửa'}
+            variant="secondary"
+            size="sm"
             onClick={() => {
               setEditingProduct(row);
               setProdForm({
@@ -651,7 +774,12 @@ export default function AdminCmsPage() {
                 craftFee: row.craftFee,
                 stock: row.stock,
                 shortDescription: row.shortDescription,
-                imageUrl: row.images?.[0] || row.thumbnail || ASSETS.products.toteBagMain,
+                imageUrl:
+                  row.image ||
+                  row.imageUrl ||
+                  row.images?.[0] ||
+                  row.thumbnail ||
+                  ASSETS.products.toteBagMain,
                 meshPreset: row.model3D?.meshPreset || 'tote_bag',
                 glbUrl: row.model3D?.glbUrl || '',
                 netWeightGrams: row.ecoImpact?.netWeightGrams || 350,
@@ -660,93 +788,108 @@ export default function AdminCmsPage() {
               });
               setIsProductModalOpen(true);
             }}
-            className="rounded-full border border-coastal-line p-2 text-coastal-slate hover:bg-coastal-mist"
-            aria-label={isEn ? 'Edit product' : 'Sửa sản phẩm'}
-          >
-            <AppIcon name="edit" className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              setDeleteTarget({ type: 'product', id: row._id, name: row.name })
-            }
-            className="rounded-full border border-coastal-rust/30 p-2 text-coastal-rust hover:bg-coastal-rust/10"
-            aria-label={isEn ? 'Delete product' : 'Xóa sản phẩm'}
-          >
-            <AppIcon name="trash" className="h-4 w-4" />
-          </button>
-        </div>
+          />
+          <Button
+            label={isEn ? 'Delete' : 'Xóa'}
+            variant="destructive"
+            size="sm"
+            onClick={() => setDeleteTarget({ type: 'product', id: row._id, name: row.name })}
+          />
+        </HStack>
       ),
     },
   ];
 
-  // DataTable Columns for CustomMaterials
-  const materialColumns: DataTableColumn<CustomMaterial>[] = [
+  // Astryx Table Columns for CustomMaterials (BOM)
+  const materialColumns: TableColumn<MaterialRow>[] = [
     {
       key: 'name',
-      header: isEn ? 'Shell / Snail Material' : 'Tên nguyên liệu vỏ sò / ốc',
-      render: (row) => (
-        <div className="flex items-center gap-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={resolveAssetUrl(row.thumbnail, ASSETS.materials.scallopShell)}
-            alt={row.name}
-            className="h-10 w-10 rounded-xl object-cover border border-coastal-line shrink-0"
-          />
-          <span
-            className="h-5 w-5 rounded-full border border-coastal-line shrink-0"
-            style={{ backgroundColor: row.colorHex }}
-          />
-          <div>
-            <div className="font-semibold text-coastal-ink">{row.name}</div>
-            <div className="text-xs text-coastal-slate">
-              Mesh 3D: <code className="font-mono text-coastal-kelp">{row.model3D?.meshPreset}</code>
-            </div>
+      header: isEn ? 'Shell / Snail Material' : 'Nguyên liệu vỏ sò / ốc biển',
+      width: proportional(2, { minWidth: 240 }),
+      renderCell: (row) => (
+        <HStack gap={3} vAlign="center">
+          <div
+            style={{
+              width: 42,
+              height: 42,
+              borderRadius: 8,
+              overflow: 'hidden',
+              flexShrink: 0,
+              border: '1px solid var(--color-border)',
+              background: 'var(--color-background-surface)',
+            }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={resolveAssetUrl(row.thumbnail, ASSETS.materials.scallopShell)}
+              alt={row.name}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+            />
           </div>
-        </div>
+          <span
+            style={{
+              width: 16,
+              height: 16,
+              borderRadius: '9999px',
+              backgroundColor: row.colorHex,
+              border: '1px solid var(--color-border)',
+              flexShrink: 0,
+            }}
+          />
+          <VStack gap={0.5}>
+            <Text weight="semibold">{row.name}</Text>
+            <Text type="code">{row.model3D?.meshPreset}</Text>
+          </VStack>
+        </HStack>
       ),
     },
     {
-      key: 'type',
+      key: 'materialType',
       header: isEn ? 'Material Group' : 'Nhóm phụ kiện',
-      render: (row) => (
-        <span className="astryx-pill bg-coastal-mist text-coastal-kelp">
-          {row.materialType}
-        </span>
-      ),
+      width: proportional(0.9, { minWidth: 120 }),
+      renderCell: (row) => <Badge variant="teal" label={row.materialType} />,
     },
     {
       key: 'unitPrice',
       header: isEn ? '3D Unit Price' : 'Đơn giá đính 3D',
-      align: 'right',
-      render: (row) => <PriceTag amount={row.unitPrice} size="sm" suffix={`/ ${t('common.pieces')}`} />,
-    },
-    {
-      key: 'stock',
-      header: isEn ? 'BOM Inventory (BR-04)' : 'Tồn kho BOM (BR-04)',
-      align: 'center',
-      render: (row) => (
-        <StatusBadge
-          status={
-            row.stockQuantity > 15
-              ? 'in_stock'
-              : row.stockQuantity > 0
-              ? 'low_stock'
-              : 'out_of_stock'
-          }
-          label={`${row.stockQuantity} ${t('common.pieces')}`}
-          size="sm"
-        />
+      width: proportional(1, { minWidth: 140 }),
+      align: 'end',
+      renderCell: (row) => (
+        <Text weight="medium" hasTabularNumbers>
+          {formatVnd(row.unitPrice)} / {t('common.pieces')}
+        </Text>
       ),
     },
     {
-      key: 'actions',
+      key: 'stockQuantity',
+      header: isEn ? 'BOM Inventory (BR-04)' : 'Tồn kho BOM (BR-04)',
+      width: proportional(1, { minWidth: 140 }),
+      align: 'end',
+      renderCell: (row) => {
+        if (row.stockQuantity <= 0) {
+          return <Badge variant="error" label={isEn ? 'Out of stock' : 'Hết hàng'} />;
+        }
+        if (row.stockQuantity <= 15) {
+          return <Badge variant="warning" label={`${row.stockQuantity} ${t('common.pieces')}`} />;
+        }
+        return (
+          <Text hasTabularNumbers>
+            {row.stockQuantity} {t('common.pieces')}
+          </Text>
+        );
+      },
+    },
+    {
+      key: '_id',
       header: isEn ? 'Actions' : 'Thao tác',
-      align: 'right',
-      render: (row) => (
-        <div className="flex items-center justify-end gap-1.5">
-          <button
-            type="button"
+      width: pixel(165),
+      align: 'end',
+      renderCell: (row) => (
+        <HStack gap={1.5} hAlign="end">
+          <Button
+            label={isEn ? 'Edit' : 'Sửa'}
+            variant="secondary"
+            size="sm"
             onClick={() => {
               setEditingMaterial(row);
               setMatForm({
@@ -762,835 +905,1050 @@ export default function AdminCmsPage() {
               });
               setIsMaterialModalOpen(true);
             }}
-            className="rounded-full border border-coastal-line p-2 text-coastal-slate hover:bg-coastal-mist"
-            aria-label={isEn ? 'Edit material' : 'Sửa nguyên liệu'}
-          >
-            <AppIcon name="edit" className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              setDeleteTarget({ type: 'material', id: row._id, name: row.name })
-            }
-            className="rounded-full border border-coastal-rust/30 p-2 text-coastal-rust hover:bg-coastal-rust/10"
-            aria-label={isEn ? 'Delete material' : 'Xóa nguyên liệu'}
-          >
-            <AppIcon name="trash" className="h-4 w-4" />
-          </button>
-        </div>
+          />
+          <Button
+            label={isEn ? 'Delete' : 'Xóa'}
+            variant="destructive"
+            size="sm"
+            onClick={() => setDeleteTarget({ type: 'material', id: row._id, name: row.name })}
+          />
+        </HStack>
       ),
     },
   ];
 
   const inspectedCustomItem = inspectedOrder?.items.find((i) => i.isCustom && i.customDesignSnapshot);
 
-  const cmsTabs: { id: AdminTab; label: string; icon: IconName }[] = [
-    {
-      id: 'dashboard',
-      label: isEn ? '1. Overview & Stock Alerts' : '1. Tổng Quan & Cảnh Báo Kho',
-      icon: 'layoutDashboard',
-    },
-    {
-      id: 'orders',
-      label: `2. ${t('cms.ordersTab')} (${orders.length})`,
-      icon: 'clipboardList',
-    },
-    {
-      id: 'products',
-      label: `3. ${t('cms.productsTab')} (${products.length})`,
-      icon: 'package',
-    },
-    {
-      id: 'materials',
-      label: `4. ${t('cms.materialsTab')} (${materials.length})`,
-      icon: 'shell',
-    },
-  ];
+  const cloudStorageLabel = mediaStatus?.isCloudinaryConfigured
+    ? `Cloudinary (${mediaStatus.cloudName || 'Cloud'})`
+    : isEn
+    ? 'Cloudinary / Local Ready'
+    : 'Cloudinary / Local Sẵn sàng';
 
   return (
-    <div className="min-h-screen flex flex-col bg-coastal-bg">
-      <AppHeader variant="cms" />
-
-      {toastMsg && (
-        <div
-          role="status"
-          className="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-full bg-coastal-kelp px-5 py-3 text-xs font-semibold text-coastal-card shadow-lg"
-        >
-          <AppIcon name="checkCircle" className="h-4 w-4 text-coastal-card" />
-          {toastMsg}
-        </div>
-      )}
-
-      <main className="flex-1 py-8">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-6">
-          {/* CMS Header & Single H1 + AWS S3 Storage Status */}
-          <div className="astryx-bento p-6 sm:p-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="astryx-pill bg-coastal-mist text-coastal-kelp">
-                  <AppIcon name="hammer" className="h-3.5 w-3.5" />
-                  {t('cms.dashboardHeading')}
-                </span>
-                {mediaStatus && (
-                  <span
-                    className={`astryx-pill font-mono ${
-                      mediaStatus.isS3Configured
-                        ? 'bg-coastal-stone text-coastal-rust border border-coastal-rust/25'
-                        : 'bg-coastal-sand text-coastal-kelp border border-coastal-kelp/25'
-                    }`}
-                  >
-                    <AppIcon
-                      name={mediaStatus.isS3Configured ? 'checkCircle' : 'layers'}
-                      className="h-3.5 w-3.5"
-                    />
-                    {mediaStatus.isS3Configured
-                      ? `AWS S3 Connected (${mediaStatus.bucket} • ${mediaStatus.region})`
-                      : `Local Fallback Mode (${t('cms.s3StatusFallback')})`}
-                  </span>
-                )}
-              </div>
-              <h1 className="font-serif text-2xl sm:text-3xl font-semibold text-coastal-ink">
-                {isEn
-                  ? 'CMS Admin Portal & 3D Crafting Inspector Workstation'
-                  : 'Cổng Quản Trị CMS & Máy Trạm Chế Tác 3D (Crafting Inspector)'}
-              </h1>
-            </div>
-
-            <EcoImpactBadge
-              variant="cms_stat"
-              netWeightGrams={kpiStats.totalNetsGrams}
+    <Theme theme={themes[defaultThemeSlug]} mode={themeMode}>
+      <AppShell
+        height="fill"
+        variant="elevated"
+        contentPadding={6}
+        banner={
+          toastMsg ? (
+            <Banner
+              status="success"
+              container="section"
+              title={toastMsg}
+              isDismissable
+              onDismiss={() => setToastMsg(null)}
             />
-          </div>
+          ) : undefined
+        }
+        topNav={
+          <TopNav
+            label="NetLoop CMS Navigation"
+            heading={
+              <TopNavHeading
+                heading="NetLoop CMS"
+                subheading={isEn ? '3D Ocean Craft & Cloudinary Admin' : 'Quản Trị Xưởng Chế Tác 3D & Cloudinary'}
+              />
+            }
+            endContent={
+              <HStack gap={2} vAlign="center">
+                <HStack gap={1.5} vAlign="center">
+                  <StatusDot
+                    variant={mediaStatus?.isCloudinaryConfigured ? 'success' : 'accent'}
+                    label={cloudStorageLabel}
+                  />
+                  <Text type="supporting">{cloudStorageLabel}</Text>
+                </HStack>
 
-          {/* 5 CMS Segmented Navigation Tabs */}
-          <div className="astryx-segmented overflow-x-auto max-w-full">
-            {cmsTabs.map((tab) => {
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-xs sm:text-sm font-semibold transition whitespace-nowrap ${
-                    isActive
-                      ? 'bg-coastal-kelp text-coastal-card shadow-xs'
-                      : 'text-coastal-slate hover:bg-coastal-mist hover:text-coastal-ink'
-                  }`}
+                <SegmentedControl
+                  size="sm"
+                  label={isEn ? 'Language' : 'Ngôn ngữ'}
+                  value={locale}
+                  onChange={(val) => setLocale(val as 'vi' | 'en')}
                 >
-                  <AppIcon name={tab.icon} className="h-4 w-4" />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
+                  <SegmentedControlItem value="vi" label="VI" />
+                  <SegmentedControlItem value="en" label="EN" />
+                </SegmentedControl>
 
-          {/* TAB 1: DASHBOARD */}
+                <SegmentedControl
+                  size="sm"
+                  label={isEn ? 'Theme Mode' : 'Chế độ giao diện'}
+                  value={themeMode}
+                  onChange={(val) => setThemeMode(val as 'light' | 'dark')}
+                >
+                  <SegmentedControlItem value="light" label={isEn ? 'Light' : 'Sáng'} />
+                  <SegmentedControlItem value="dark" label={isEn ? 'Dark' : 'Tối'} />
+                </SegmentedControl>
+
+                <Button
+                  label={isEn ? 'Open Web Store' : 'Mở Web Store'}
+                  variant="secondary"
+                  size="sm"
+                  icon={<Icon icon="externalLink" />}
+                  href={ENV.STORE_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                />
+              </HStack>
+            }
+          />
+        }
+        sideNav={
+          <SideNav
+            collapsible
+            header={
+              <SideNavHeading
+                superheading="DTU Upcycled Craft"
+                heading={isEn ? 'Artisan CMS' : 'Xưởng Thủ Công 3D'}
+                subheading="Astryx Neutral Theme"
+              />
+            }
+            footer={
+              <VStack gap={1}>
+                <Text type="label">
+                  {isEn ? 'Ghost Nets Recovered (BR-08)' : 'Lưới Thu Hồi Đại Dương (BR-08)'}
+                </Text>
+                <Text type="code" hasTabularNumbers>
+                  {(kpiStats.totalNetsGrams / 1000).toFixed(2)} kg ({kpiStats.totalNetsGrams.toLocaleString()}g)
+                </Text>
+              </VStack>
+            }
+          >
+            <SideNavSection title={isEn ? 'Workshop Operations' : 'Vận hành xưởng 3D'}>
+              <SideNavItem
+                label={isEn ? 'Overview & KPIs' : 'Tổng quan & Cảnh báo'}
+                icon="info"
+                isSelected={activeTab === 'dashboard'}
+                onClick={() => setActiveTab('dashboard')}
+              />
+              <SideNavItem
+                label={isEn ? 'Orders & 3D Tickets' : 'Đơn hàng & Phiếu 3D'}
+                icon="calendar"
+                isSelected={activeTab === 'orders'}
+                endContent={<Badge variant="neutral" label={String(orders.length)} />}
+                onClick={() => setActiveTab('orders')}
+              />
+            </SideNavSection>
+
+            <SideNavSection title={isEn ? 'Catalog & Cloudinary' : 'Danh mục & Cloudinary'}>
+              <SideNavItem
+                label={isEn ? 'Products & Images' : 'Sản phẩm & Hình ảnh'}
+                icon="viewColumns"
+                isSelected={activeTab === 'products'}
+                endContent={<Badge variant="neutral" label={String(products.length)} />}
+                onClick={() => setActiveTab('products')}
+              />
+              <SideNavItem
+                label={isEn ? 'Materials BOM (BR-04)' : 'Kho Vỏ sò / Ốc BOM'}
+                icon="wrench"
+                isSelected={activeTab === 'materials'}
+                endContent={
+                  kpiStats.lowStockMats.length > 0 ? (
+                    <Badge variant="warning" label={String(kpiStats.lowStockMats.length)} />
+                  ) : (
+                    <Badge variant="neutral" label={String(materials.length)} />
+                  )
+                }
+                onClick={() => setActiveTab('materials')}
+              />
+            </SideNavSection>
+          </SideNav>
+        }
+      >
+        <VStack gap={6}>
+          {/* Page Header Region */}
+          <HStack gap={4} vAlign="center" hAlign="between" wrap="wrap">
+            <VStack gap={1}>
+              <Heading level={1}>
+                {activeTab === 'dashboard' &&
+                  (isEn
+                    ? 'Workshop Overview & 3D Crafting Operations'
+                    : 'Tổng Quan Xưởng Thủ Công & Máy Trạm Chế Tác 3D')}
+                {activeTab === 'orders' &&
+                  (isEn
+                    ? 'Orders & 3D Crafting Tickets (BR-05 / BR-07)'
+                    : 'Quản Lý Đơn Hàng & Phiếu Chế Tác 3D (BR-05 / BR-07)')}
+                {activeTab === 'products' &&
+                  (isEn
+                    ? 'Upcycled Product Catalog & Cloudinary Images'
+                    : 'Danh Mục Sản Phẩm Tái Chế & Hình Ảnh Cloudinary')}
+                {activeTab === 'materials' &&
+                  (isEn
+                    ? 'Marine Shell / Snail BOM Inventory (BR-04)'
+                    : 'Kho Nguyên Liệu Vỏ Sò / Ốc Biển BOM (BR-04)')}
+              </Heading>
+              <Text type="supporting">
+                {isEn
+                  ? 'Built with Meta Astryx Design System (Neutral Theme) • Connected to Cloudinary & MongoDB API'
+                  : 'Giao diện quản trị thiết kế bằng Meta Astryx (Neutral Theme) • Kết nối trực tiếp Cloudinary & MongoDB API'}
+              </Text>
+            </VStack>
+
+            <HStack gap={2} vAlign="center">
+              {activeTab === 'products' && (
+                <Button
+                  label={isEn ? 'Add Product Blank' : 'Thêm sản phẩm mới'}
+                  variant="primary"
+                  onClick={() => {
+                    setEditingProduct(null);
+                    setProdForm({
+                      name: '',
+                      slug: '',
+                      category: 'bag',
+                      basePrice: 320000,
+                      craftFee: 30000,
+                      stock: 25,
+                      shortDescription: '',
+                      imageUrl: ASSETS.products.toteBagMain,
+                      meshPreset: 'tote_bag',
+                      glbUrl: '',
+                      netWeightGrams: 380,
+                      originSea: 'Bán đảo Sơn Trà, Đà Nẵng',
+                      isCustomizable: true,
+                    });
+                    setIsProductModalOpen(true);
+                  }}
+                />
+              )}
+              {activeTab === 'materials' && (
+                <Button
+                  label={isEn ? 'Add Shell / Snail' : 'Thêm vỏ sò / ốc mới'}
+                  variant="primary"
+                  onClick={() => {
+                    setEditingMaterial(null);
+                    setMatForm({
+                      name: '',
+                      materialType: 'shell',
+                      unitPrice: 15000,
+                      stockQuantity: 100,
+                      colorHex: PRODUCT_COLOR_PRESETS.sandCream,
+                      thumbnail: ASSETS.materials.scallopShell,
+                      meshPreset: 'scallop_shell',
+                      glbUrl: '',
+                      description: '',
+                    });
+                    setIsMaterialModalOpen(true);
+                  }}
+                />
+              )}
+              {activeTab === 'dashboard' && (
+                <Button
+                  label={isEn ? 'Open 3D Ticket Inspector' : 'Mở Máy Trạm 3D Inspector'}
+                  variant="primary"
+                  onClick={() => {
+                    if (!inspectedOrder && orders.length > 0) {
+                      setInspectedOrder(orders[0]);
+                    }
+                    setIsInspectorOpen(true);
+                  }}
+                />
+              )}
+            </HStack>
+          </HStack>
+
+          <Divider />
+
+          {/* =============================================================== */}
+          {/* VIEW 1: DASHBOARD                                               */}
+          {/* =============================================================== */}
           {activeTab === 'dashboard' && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="astryx-bento p-5">
-                  <span className="font-mono text-[11px] font-semibold uppercase text-coastal-slate">
-                    {isEn ? 'Total Workshop Revenue' : 'Tổng Doanh Thu Xưởng'}
-                  </span>
-                  <div className="mt-2">
-                    <PriceTag amount={kpiStats.revenue} size="xl" />
-                  </div>
-                  <span className="mt-1 block text-xs text-coastal-kelp font-medium">
-                    {isEn ? '+18% from 3D Custom Orders' : '+18% từ đơn Chế tác 3D'}
-                  </span>
-                </div>
+            <VStack gap={6}>
+              {/* 4 KPI Metric Cards */}
+              <Grid columns={4} gap={4}>
+                <Card>
+                  <VStack gap={1.5}>
+                    <Text type="supporting">
+                      {isEn ? 'Total Workshop Revenue' : 'Tổng doanh thu xưởng'}
+                    </Text>
+                    <Heading level={2}>{formatVnd(kpiStats.revenue)}</Heading>
+                    <Text type="supporting">
+                      {isEn ? 'Includes 3D custom crafting fees' : 'Bao gồm phí đan & đính phụ kiện 3D'}
+                    </Text>
+                  </VStack>
+                </Card>
 
-                <div className="astryx-bento p-5">
-                  <span className="font-mono text-[11px] font-semibold uppercase text-coastal-slate">
-                    {isEn ? 'Total Orders' : 'Tổng Đơn Đặt Hàng'}
-                  </span>
-                  <div className="mt-2 font-mono text-2xl sm:text-3xl font-bold text-coastal-ink">
-                    {kpiStats.totalOrders} {isEn ? 'orders' : 'đơn'}
-                  </div>
-                  <span className="mt-1 block text-xs text-coastal-slate">
-                    {isEn ? 'Synced VietQR & COD' : 'Đồng bộ VietQR & COD'}
-                  </span>
-                </div>
+                <Card>
+                  <VStack gap={1.5}>
+                    <Text type="supporting">
+                      {isEn ? 'Total Orders' : 'Tổng đơn đặt hàng'}
+                    </Text>
+                    <Heading level={2}>
+                      {kpiStats.totalOrders} {isEn ? 'orders' : 'đơn'}
+                    </Heading>
+                    <Text type="supporting">
+                      {isEn ? 'Synced VietQR & COD' : 'Đồng bộ thanh toán VietQR & COD'}
+                    </Text>
+                  </VStack>
+                </Card>
 
-                <div className="astryx-bento p-5">
-                  <span className="font-mono text-[11px] font-semibold uppercase text-coastal-slate">
-                    {isEn ? 'Orders in Crafting' : 'Đơn Đang Đan & Đính Ốc'}
-                  </span>
-                  <div className="mt-2 font-mono text-2xl sm:text-3xl font-bold text-coastal-rust">
-                    {kpiStats.craftingCount} {isEn ? '3D tickets' : 'phiếu 3D'}
-                  </div>
-                  <span className="mt-1 block text-xs text-coastal-slate">
-                    {isEn ? 'Active on 3D Inspector' : 'Đang mở trên 3D Inspector'}
-                  </span>
-                </div>
+                <Card>
+                  <VStack gap={1.5}>
+                    <Text type="supporting">
+                      {isEn ? 'Active 3D Crafting Tickets' : 'Phiếu đang chế tác 3D'}
+                    </Text>
+                    <Heading level={2}>
+                      {kpiStats.craftingCount} {isEn ? 'tickets' : 'phiếu'}
+                    </Heading>
+                    <Text type="supporting">
+                      {isEn ? 'Ready in 3D Inspector' : 'Đang xử lý trên máy trạm 3D'}
+                    </Text>
+                  </VStack>
+                </Card>
 
-                <div className="astryx-bento p-5">
-                  <span className="font-mono text-[11px] font-semibold uppercase text-coastal-slate">
-                    {isEn ? 'Ghost Nets Recovered (BR-08)' : 'Lưới Đánh Cá Thu Hồi (BR-08)'}
-                  </span>
-                  <div className="mt-2 font-mono text-2xl sm:text-3xl font-bold text-coastal-kelp">
-                    {(kpiStats.totalNetsGrams / 1000).toFixed(2)} kg
-                  </div>
-                  <span className="mt-1 block text-xs text-coastal-kelp font-medium">
-                    {kpiStats.totalNetsGrams.toLocaleString(isEn ? 'en-US' : 'vi-VN')}{' '}
-                    {t('eco.netGramsUnit')}
-                  </span>
-                </div>
-              </div>
+                <Card>
+                  <VStack gap={1.5}>
+                    <Text type="supporting">
+                      {isEn ? 'Ghost Nets Recovered (BR-08)' : 'Lưới ma thu hồi (BR-08)'}
+                    </Text>
+                    <Heading level={2}>{(kpiStats.totalNetsGrams / 1000).toFixed(2)} kg</Heading>
+                    <Text type="supporting" hasTabularNumbers>
+                      {kpiStats.totalNetsGrams.toLocaleString(isEn ? 'en-US' : 'vi-VN')} gram lưới biển
+                    </Text>
+                  </VStack>
+                </Card>
+              </Grid>
 
-              {/* Low Stock Material Alert Box */}
-              <div className="astryx-bento border-coastal-rust/40 p-5 sm:p-6 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-coastal-ink">
-                    <AppIcon name="alertTriangle" className="h-5 w-5 text-coastal-rust" />
-                    {isEn
-                      ? `Low Stock Shell / Snail BOM Alert (${kpiStats.lowStockMats.length})`
-                      : `Cảnh Báo Nguyên Liệu Vỏ Sò / Ốc Sắp Cạn Kho (${kpiStats.lowStockMats.length})`}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('materials')}
-                    className="font-mono text-xs font-semibold text-coastal-kelp hover:underline"
-                  >
-                    {isEn ? 'Restock BOM inventory →' : 'Nhập thêm kho nguyên liệu →'}
-                  </button>
-                </div>
-
-                {kpiStats.lowStockMats.length === 0 ? (
-                  <p className="text-xs text-coastal-slate">
-                    {isEn
-                      ? 'All shell and snail materials have sufficient safety stock.'
-                      : 'Tất cả nguyên liệu vỏ sò, ốc biển đều đảm bảo định mức tồn kho an toàn.'}
-                  </p>
-                ) : (
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {/* Low Stock Material Alert Banner */}
+              {kpiStats.lowStockMats.length > 0 ? (
+                <Banner
+                  status="warning"
+                  container="card"
+                  collapsible={false}
+                  title={
+                    isEn
+                      ? `Low Stock Shell / Snail BOM Alert (${kpiStats.lowStockMats.length} items <= 15 pcs)`
+                      : `Cảnh báo nguyên liệu vỏ sò / ốc biển sắp cạn kho (${kpiStats.lowStockMats.length} mã <= 15 cái)`
+                  }
+                  description={
+                    isEn
+                      ? 'Replenish BOM stock so customers can continue placing 3D custom orders without interruption.'
+                      : 'Cần nhập bổ sung định mức BOM để khách hàng tiếp tục đính phụ kiện trong phòng 3D Studio.'
+                  }
+                  endContent={
+                    <Button
+                      label={isEn ? 'Manage BOM Stock' : 'Nhập kho BOM'}
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setActiveTab('materials')}
+                    />
+                  }
+                >
+                  <Grid columns={3} gap={3}>
                     {kpiStats.lowStockMats.map((m) => (
+                      <Card key={m._id} variant="muted">
+                        <HStack gap={2} vAlign="center" hAlign="between">
+                          <VStack gap={0.5}>
+                            <Text weight="semibold">{m.name}</Text>
+                            <Text type="supporting" hasTabularNumbers>
+                              {formatVnd(m.unitPrice)} / {t('common.pieces')}
+                            </Text>
+                          </VStack>
+                          <Badge
+                            variant="warning"
+                            label={`${m.stockQuantity} ${t('common.pieces')}`}
+                          />
+                        </HStack>
+                      </Card>
+                    ))}
+                  </Grid>
+                </Banner>
+              ) : (
+                <Banner
+                  status="info"
+                  container="card"
+                  title={
+                    isEn
+                      ? 'All marine shell & snail BOM materials are well stocked'
+                      : 'Tất cả nguyên liệu vỏ sò, ốc biển trong kho BOM đều đạt định mức an toàn'
+                  }
+                  description={
+                    isEn
+                      ? `Cloudinary Media Storage: ${cloudStorageLabel}`
+                      : `Trạng thái lưu trữ hình ảnh: ${cloudStorageLabel}`
+                  }
+                />
+              )}
+
+              {/* Recent 3D Crafting Tickets Section */}
+              <Section padding={4}>
+                <VStack gap={4}>
+                  <HStack gap={2} vAlign="center" hAlign="between" wrap="wrap">
+                    <VStack gap={0.5}>
+                      <Heading level={2}>
+                        {isEn ? 'Recent 3D Crafting Tickets' : 'Phiếu Chế Tác 3D Mới Tiếp Nhận'}
+                      </Heading>
+                      <Text type="supporting">
+                        {isEn
+                          ? 'Click "3D Ticket" on any row to inspect the customer’s 3D shell placement coordinates.'
+                          : 'Bấm "Phiếu 3D" trên từng dòng để mở máy trạm kiểm tra tọa độ đính vỏ sò 3D của khách.'}
+                      </Text>
+                    </VStack>
+                    <Button
+                      label={isEn ? 'View All Orders' : 'Xem tất cả đơn hàng'}
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setActiveTab('orders')}
+                    />
+                  </HStack>
+
+                  <Table
+                    data={filteredOrders.slice(0, 5)}
+                    columns={orderColumns}
+                    idKey="orderCode"
+                    density="balanced"
+                    hasHover
+                  />
+                </VStack>
+              </Section>
+            </VStack>
+          )}
+
+          {/* =============================================================== */}
+          {/* VIEW 2: ORDERS & 3D CRAFTING INSPECTOR                          */}
+          {/* =============================================================== */}
+          {activeTab === 'orders' && (
+            <Section padding={4}>
+              <VStack gap={4}>
+                <HStack gap={3} vAlign="end" wrap="wrap">
+                  <StackItem size="fill">
+                    <TextInput
+                      type="search"
+                      label={isEn ? 'Search orders' : 'Tìm kiếm đơn hàng'}
+                      value={orderSearch}
+                      onChange={setOrderSearch}
+                      placeholder={
+                        isEn
+                          ? 'Order code DTU-..., customer name, or phone...'
+                          : 'Nhập mã đơn DTU-..., tên khách hàng hoặc SĐT...'
+                      }
+                      startIcon="search"
+                      hasClear
+                      width="100%"
+                    />
+                  </StackItem>
+
+                  <Selector
+                    label={isEn ? 'Filter by Crafting Status' : 'Lọc theo trạng thái chế tác'}
+                    value={orderStatusFilter}
+                    onChange={setOrderStatusFilter}
+                    width={240}
+                    options={[
+                      { value: 'all', label: isEn ? 'All statuses (7)' : 'Tất cả trạng thái (7)' },
+                      { value: 'pending', label: t('status.pending') },
+                      { value: 'confirmed', label: t('status.confirmed') },
+                      { value: 'in_crafting', label: t('status.in_crafting') },
+                      { value: 'quality_check', label: t('status.quality_check') },
+                      { value: 'shipping', label: t('status.shipping') },
+                      { value: 'delivered', label: t('status.delivered') },
+                      { value: 'cancelled', label: t('status.cancelled') },
+                    ]}
+                  />
+
+                  {(orderSearch || orderStatusFilter !== 'all') && (
+                    <Button
+                      label={isEn ? 'Reset filters' : 'Xóa bộ lọc'}
+                      variant="ghost"
+                      onClick={() => {
+                        setOrderSearch('');
+                        setOrderStatusFilter('all');
+                      }}
+                    />
+                  )}
+                </HStack>
+
+                <Table
+                  data={filteredOrders}
+                  columns={orderColumns}
+                  idKey="orderCode"
+                  density="balanced"
+                  hasHover
+                />
+              </VStack>
+            </Section>
+          )}
+
+          {/* =============================================================== */}
+          {/* VIEW 3: PRODUCTS & CLOUDINARY IMAGES                            */}
+          {/* =============================================================== */}
+          {activeTab === 'products' && (
+            <Section padding={4}>
+              <VStack gap={4}>
+                <HStack gap={3} vAlign="end" wrap="wrap">
+                  <StackItem size="fill">
+                    <TextInput
+                      type="search"
+                      label={isEn ? 'Search products' : 'Tìm kiếm sản phẩm'}
+                      value={productSearch}
+                      onChange={setProductSearch}
+                      placeholder={
+                        isEn
+                          ? 'Search product by name...'
+                          : 'Nhập tên túi lưới, giỏ, ví, vòng tay...'
+                      }
+                      startIcon="search"
+                      hasClear
+                      width="100%"
+                    />
+                  </StackItem>
+
+                  <Selector
+                    label={isEn ? 'Product Category' : 'Danh mục sản phẩm'}
+                    value={productCatFilter}
+                    onChange={setProductCatFilter}
+                    width={220}
+                    options={[
+                      { value: 'all', label: t('categories.all') },
+                      { value: 'bag', label: t('categories.bag') },
+                      { value: 'basket', label: t('categories.basket') },
+                      { value: 'wallet', label: t('categories.wallet') },
+                      { value: 'apparel', label: t('categories.apparel') },
+                      { value: 'bracelet', label: t('categories.bracelet') },
+                      { value: 'accessory', label: t('categories.accessory') },
+                    ]}
+                  />
+                </HStack>
+
+                <Table
+                  data={filteredProducts}
+                  columns={productColumns}
+                  idKey="_id"
+                  density="balanced"
+                  hasHover
+                />
+              </VStack>
+            </Section>
+          )}
+
+          {/* =============================================================== */}
+          {/* VIEW 4: MATERIALS BOM INVENTORY                                 */}
+          {/* =============================================================== */}
+          {activeTab === 'materials' && (
+            <Section padding={4}>
+              <VStack gap={4}>
+                <HStack gap={3} vAlign="end" wrap="wrap">
+                  <StackItem size="fill">
+                    <TextInput
+                      type="search"
+                      label={isEn ? 'Search shells, snails, charms' : 'Tìm kiếm nguyên liệu BOM'}
+                      value={materialSearch}
+                      onChange={setMaterialSearch}
+                      placeholder={
+                        isEn
+                          ? 'Search scallop shell, spiral snail, starfish...'
+                          : 'Tìm vỏ sò điệp, ốc xoắn, sao biển...'
+                      }
+                      startIcon="search"
+                      hasClear
+                      width="100%"
+                    />
+                  </StackItem>
+
+                  <Selector
+                    label={isEn ? 'Material Group' : 'Nhóm phụ kiện'}
+                    value={materialTypeFilter}
+                    onChange={setMaterialTypeFilter}
+                    width={220}
+                    options={[
+                      { value: 'all', label: isEn ? 'All groups' : 'Tất cả nhóm phụ kiện' },
+                      { value: 'shell', label: 'Vỏ sò (Shell)' },
+                      { value: 'snail', label: 'Ốc biển (Snail)' },
+                      { value: 'charm', label: 'Charm biển (Charm)' },
+                      { value: 'bead', label: 'Ngọc trai / Hạt (Bead)' },
+                      { value: 'cord', label: 'Nút dây lưới (Cord)' },
+                    ]}
+                  />
+                </HStack>
+
+                <Table
+                  data={filteredMaterials}
+                  columns={materialColumns}
+                  idKey="_id"
+                  density="balanced"
+                  hasHover
+                />
+              </VStack>
+            </Section>
+          )}
+        </VStack>
+      </AppShell>
+
+      {/* =================================================================== */}
+      {/* ASTRYX DRAWER: 3D CRAFTING INSPECTOR WORKSTATION (BR-07 & BR-05)    */}
+      {/* =================================================================== */}
+      <Drawer
+        isOpen={isInspectorOpen}
+        onOpenChange={setIsInspectorOpen}
+        label={isEn ? '3D Crafting Inspector Workstation' : 'Máy trạm chế tác 3D Inspector'}
+        width={820}
+      >
+        <Layout
+          header={
+            <DrawerHeader
+              title={
+                inspectedOrder
+                  ? `${isEn ? '3D Ticket:' : 'Phiếu chế tác:'} ${inspectedOrder.orderCode}`
+                  : isEn
+                  ? '3D Crafting Inspector'
+                  : 'Máy Trạm Chế Tác 3D'
+              }
+              subtitle={
+                inspectedOrder
+                  ? `${inspectedOrder.customerInfo.fullName} • ${inspectedOrder.customerInfo.phone}`
+                  : undefined
+              }
+              onOpenChange={setIsInspectorOpen}
+            />
+          }
+          content={
+            <LayoutContent>
+              {inspectedOrder && (
+                <VStack gap={4}>
+                  <OrderStatusStepper
+                    currentStatus={inspectedOrder.status}
+                    interactive={true}
+                    onStatusChange={(nextStatus) => handleStepOrderStatus(inspectedOrder, nextStatus)}
+                    updatedAt={inspectedOrder.updatedAt}
+                  />
+
+                  {inspectedCustomItem && inspectedCustomItem.customDesignSnapshot ? (
+                    <VStack gap={4}>
                       <div
-                        key={m._id}
-                        className="flex items-center justify-between astryx-card p-3.5 text-xs"
+                        style={{
+                          height: 360,
+                          width: '100%',
+                          borderRadius: 12,
+                          overflow: 'hidden',
+                          border: '1px solid var(--color-border)',
+                        }}
                       >
-                        <div>
-                          <strong className="text-coastal-ink block">{m.name}</strong>
-                          <span className="font-mono text-coastal-slate">
-                            {isEn ? 'Unit:' : 'Đơn giá:'} {formatVnd(m.unitPrice)}
-                          </span>
-                        </div>
-                        <StatusBadge
-                          status="low_stock"
-                          label={`${m.stockQuantity} ${t('common.pieces')}`}
-                          size="sm"
+                        <ThreeCanvasViewer
+                          mode="inspector"
+                          productPreset={
+                            inspectedCustomItem.customDesignSnapshot.meshPreset || 'tote_bag'
+                          }
+                          productGlbUrl={inspectedCustomItem.customDesignSnapshot.glbUrl}
+                          baseColor={inspectedCustomItem.customDesignSnapshot.baseColor}
+                          strapColor={inspectedCustomItem.customDesignSnapshot.strapColor}
+                          placements={inspectedCustomItem.customDesignSnapshot.placements}
+                          braceletConfig={inspectedCustomItem.customDesignSnapshot.braceletConfig}
+                          selectedPlacementId={selectedInspectorPlacementId}
+                          onSelectPlacement={setSelectedInspectorPlacementId}
+                          className="h-full w-full"
                         />
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
 
-              {/* Quick Recent Orders Table */}
-              <div className="space-y-3">
-                <h2 className="font-serif text-lg font-semibold text-coastal-ink">
-                  {isEn ? 'Recent 3D Crafting Tickets' : 'Phiếu Chế Tác 3D Mới Tiếp Nhận'}
-                </h2>
-                <DataTable
-                  columns={orderColumns}
-                  data={orders.slice(0, 5)}
-                  rowKey={(r) => r.orderCode}
-                />
-              </div>
-            </div>
-          )}
+                      {inspectedCustomItem.customDesignSnapshot.artisanNote && (
+                        <Banner
+                          status="info"
+                          container="card"
+                          collapsible={false}
+                          title={
+                            isEn ? 'Customer note for artisan' : 'Ghi chú của khách cho nghệ nhân'
+                          }
+                          description={inspectedCustomItem.customDesignSnapshot.artisanNote}
+                        />
+                      )}
 
-          {/* TAB 2: ORDERS & 3D CRAFTING INSPECTOR */}
-          {activeTab === 'orders' && (
-            <div className="space-y-4">
-              <FilterToolbar
-                searchValue={orderSearch}
-                onSearchChange={setOrderSearch}
-                searchPlaceholder={
-                  isEn
-                    ? 'Search by order code DTU-..., customer name, or phone...'
-                    : 'Tìm theo mã đơn DTU-..., tên khách hàng hoặc SĐT...'
-                }
-                categoryOptions={[
-                  { value: 'all', label: isEn ? 'All statuses (7)' : 'Tất cả trạng thái (7)' },
-                  { value: 'pending', label: t('status.pending') },
-                  { value: 'confirmed', label: t('status.confirmed') },
-                  { value: 'in_crafting', label: t('status.in_crafting') },
-                  { value: 'quality_check', label: t('status.quality_check') },
-                  { value: 'shipping', label: t('status.shipping') },
-                  { value: 'delivered', label: t('status.delivered') },
-                  { value: 'cancelled', label: t('status.cancelled') },
-                ]}
-                selectedCategory={orderStatusFilter}
-                onCategoryChange={setOrderStatusFilter}
-                onResetFilters={() => {
-                  setOrderSearch('');
-                  setOrderStatusFilter('all');
-                }}
-              />
-
-              <DataTable
-                columns={orderColumns}
-                data={filteredOrders}
-                rowKey={(r) => r.orderCode}
-              />
-            </div>
-          )}
-
-          {/* TAB 3: PRODUCTS CRUD (BR-09) */}
-          {activeTab === 'products' && (
-            <div className="space-y-4">
-              <FilterToolbar
-                searchValue={productSearch}
-                onSearchChange={setProductSearch}
-                searchPlaceholder={
-                  isEn ? 'Search product by name...' : 'Tìm sản phẩm theo tên...'
-                }
-                categoryOptions={[
-                  { value: 'all', label: t('categories.all') },
-                  { value: 'bag', label: t('categories.bag') },
-                  { value: 'basket', label: t('categories.basket') },
-                  { value: 'wallet', label: t('categories.wallet') },
-                  { value: 'apparel', label: t('categories.apparel') },
-                  { value: 'bracelet', label: t('categories.bracelet') },
-                  { value: 'accessory', label: t('categories.accessory') },
-                ]}
-                selectedCategory={productCatFilter}
-                onCategoryChange={setProductCatFilter}
-                rightSlot={
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingProduct(null);
-                      setProdForm({
-                        name: '',
-                        slug: '',
-                        category: 'bag',
-                        basePrice: 320000,
-                        craftFee: 30000,
-                        stock: 25,
-                        shortDescription: '',
-                        imageUrl: ASSETS.products.toteBagMain,
-                        meshPreset: 'tote_bag',
-                        glbUrl: '',
-                        netWeightGrams: 380,
-                        originSea: 'Bán đảo Sơn Trà, Đà Nẵng',
-                        isCustomizable: true,
-                      });
-                      setIsProductModalOpen(true);
-                    }}
-                    className="astryx-btn-primary px-4 py-2 text-xs"
-                  >
-                    <AppIcon name="plus" className="h-4 w-4" />
-                    {isEn ? 'Add 3D Product Blank' : 'Thêm Phôi Sản Phẩm 3D'}
-                  </button>
-                }
-              />
-
-              <DataTable
-                columns={productColumns}
-                data={filteredProducts}
-                rowKey={(r) => r._id}
-              />
-            </div>
-          )}
-
-          {/* TAB 4: MATERIALS CRUD */}
-          {activeTab === 'materials' && (
-            <div className="space-y-4">
-              <FilterToolbar
-                searchValue={materialSearch}
-                onSearchChange={setMaterialSearch}
-                searchPlaceholder={
-                  isEn
-                    ? 'Search shell, spiral snail, starfish...'
-                    : 'Tìm nguyên liệu vỏ sò, ốc xoắn, sao biển...'
-                }
-                categoryOptions={[
-                  {
-                    value: 'all',
-                    label: isEn ? 'All material groups' : 'Tất cả nhóm phụ kiện',
-                  },
-                  { value: 'shell', label: 'Vỏ sò (Shell)' },
-                  { value: 'snail', label: 'Ốc biển (Snail)' },
-                  { value: 'charm', label: 'Charm biển' },
-                  { value: 'bead', label: 'Ngọc trai / Hạt' },
-                  { value: 'cord', label: 'Dây lưới' },
-                ]}
-                selectedCategory={materialTypeFilter}
-                onCategoryChange={setMaterialTypeFilter}
-                rightSlot={
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingMaterial(null);
-                      setMatForm({
-                        name: '',
-                        materialType: 'shell',
-                        unitPrice: 15000,
-                        stockQuantity: 100,
-                        colorHex: PRODUCT_COLOR_PRESETS.sandCream,
-                        thumbnail: ASSETS.materials.scallopShell,
-                        meshPreset: 'scallop_shell',
-                        glbUrl: '',
-                        description: '',
-                      });
-                      setIsMaterialModalOpen(true);
-                    }}
-                    className="astryx-btn-leaf px-4 py-2 text-xs"
-                  >
-                    <AppIcon name="plus" className="h-4 w-4" />
-                    {isEn ? 'Add New Shell / Snail' : 'Thêm Vỏ Sò / Ốc Mới'}
-                  </button>
-                }
-              />
-
-              <DataTable
-                columns={materialColumns}
-                data={filteredMaterials}
-                rowKey={(r) => r._id}
-              />
-            </div>
-          )}
-        </div>
-      </main>
-
-      {/* ===================================================================== */}
-      {/* MODAL 1: 3D CRAFTING INSPECTOR WORKSTATION (BR-07 & BR-05)            */}
-      {/* ===================================================================== */}
-      {inspectedOrder && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-coastal-ink/75 backdrop-blur-xs p-3 sm:p-6 overflow-y-auto"
-          role="dialog"
-          aria-modal="true"
-          aria-label={isEn ? '3D Crafting Inspector Workstation' : 'Máy trạm kiểm tra phiếu chế tác 3D'}
-        >
-          <div className="relative w-full max-w-6xl astryx-bento bg-coastal-card p-5 sm:p-7 shadow-2xl max-h-[92vh] overflow-y-auto space-y-6">
-            <div className="flex items-start justify-between gap-4 border-b border-coastal-line pb-4">
-              <div>
-                <span className="astryx-pill bg-coastal-mist text-coastal-kelp">
-                  <AppIcon name="box" className="h-4 w-4" />
-                  {isEn
-                    ? 'Artisan 3D Crafting Inspector Workstation — BR-07'
-                    : 'Máy Trạm Chế Tác 3D (Artisan 3D Crafting Inspector — BR-07)'}
-                </span>
-                <h2 className="font-serif text-xl sm:text-2xl font-semibold text-coastal-ink mt-1.5">
-                  {isEn ? 'Crafting Ticket:' : 'Phiếu Chế Tác Đơn Hàng:'} {inspectedOrder.orderCode} —{' '}
-                  {inspectedOrder.customerInfo.fullName}
-                </h2>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setInspectedOrder(null)}
-                className="rounded-full border border-coastal-line p-2 text-coastal-slate hover:bg-coastal-mist"
-              >
-                <AppIcon name="x" className="h-5 w-5" />
-              </button>
-            </div>
-
-            {/* Interactive 6-Step Status Stepper */}
-            <OrderStatusStepper
-              currentStatus={inspectedOrder.status}
-              interactive={true}
-              onStatusChange={(nextStatus) => handleStepOrderStatus(inspectedOrder, nextStatus)}
-              updatedAt={inspectedOrder.updatedAt}
-            />
-
-            {/* 3D Inspector Split View */}
-            {inspectedCustomItem && inspectedCustomItem.customDesignSnapshot ? (
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-                <div className="lg:col-span-7 space-y-3">
-                  <div className="h-[420px] w-full astryx-card p-2">
-                    <div className="h-full w-full overflow-hidden rounded-xl">
-                      <ThreeCanvasViewer
-                        mode="inspector"
-                        productPreset={
-                          inspectedCustomItem.customDesignSnapshot.meshPreset || 'tote_bag'
-                        }
-                        productGlbUrl={inspectedCustomItem.customDesignSnapshot.glbUrl}
-                        baseColor={inspectedCustomItem.customDesignSnapshot.baseColor}
-                        strapColor={inspectedCustomItem.customDesignSnapshot.strapColor}
+                      <BomPriceBreakdownCard
+                        variant="crafting_checklist"
+                        baseProductName={inspectedCustomItem.productName}
+                        basePrice={inspectedCustomItem.customDesignSnapshot.basePrice}
+                        craftFee={inspectedCustomItem.customDesignSnapshot.craftFee}
                         placements={inspectedCustomItem.customDesignSnapshot.placements}
-                        braceletConfig={inspectedCustomItem.customDesignSnapshot.braceletConfig}
-                        selectedPlacementId={selectedInspectorPlacementId}
-                        onSelectPlacement={setSelectedInspectorPlacementId}
-                        className="h-full w-full"
+                        quantity={inspectedCustomItem.quantity}
+                        checkedMaterialIds={checkedMaterialIds}
+                        onToggleChecklist={(matId) => {
+                          setCheckedMaterialIds((prev) =>
+                            prev.includes(matId)
+                              ? prev.filter((id) => id !== matId)
+                              : [...prev, matId]
+                          );
+                        }}
                       />
-                    </div>
-                  </div>
-                  {inspectedCustomItem.customDesignSnapshot.artisanNote && (
-                    <div className="rounded-xl border border-coastal-line bg-coastal-mist p-3.5 text-xs text-coastal-ink">
-                      <strong>
-                        {isEn ? 'Customer note for artisan:' : 'Ghi chú của khách cho thợ khâu:'}
-                      </strong>{' '}
-                      {inspectedCustomItem.customDesignSnapshot.artisanNote}
-                    </div>
+                    </VStack>
+                  ) : (
+                    <Card variant="muted">
+                      <Text type="supporting">
+                        {isEn
+                          ? 'This order contains standard ready-made blanks (no 3D shell attachments).'
+                          : 'Đơn hàng này gồm các sản phẩm phôi tiêu chuẩn (không đính phụ kiện Chế tác 3D).'}
+                      </Text>
+                    </Card>
                   )}
-                </div>
-
-                <div className="lg:col-span-5 space-y-4">
-                  <BomPriceBreakdownCard
-                    variant="crafting_checklist"
-                    baseProductName={inspectedCustomItem.productName}
-                    basePrice={inspectedCustomItem.customDesignSnapshot.basePrice}
-                    craftFee={inspectedCustomItem.customDesignSnapshot.craftFee}
-                    placements={inspectedCustomItem.customDesignSnapshot.placements}
-                    quantity={inspectedCustomItem.quantity}
-                    checkedMaterialIds={checkedMaterialIds}
-                    onToggleChecklist={(matId) => {
-                      setCheckedMaterialIds((prev) =>
-                        prev.includes(matId)
-                          ? prev.filter((id) => id !== matId)
-                          : [...prev, matId]
-                      );
+                </VStack>
+              )}
+            </LayoutContent>
+          }
+          footer={
+            <LayoutFooter>
+              <HStack gap={2} hAlign="end">
+                <Button
+                  label={isEn ? 'Close Workstation' : 'Đóng máy trạm'}
+                  variant="secondary"
+                  onClick={() => setIsInspectorOpen(false)}
+                />
+                {inspectedOrder && NEXT_ORDER_STATUS[inspectedOrder.status] && (
+                  <Button
+                    label={
+                      isEn
+                        ? `Advance to "${NEXT_ORDER_STATUS[inspectedOrder.status]}"`
+                        : `Chuyển sang bước "${
+                            getOrderStatusBadge(
+                              NEXT_ORDER_STATUS[inspectedOrder.status] as OrderStatus,
+                              false
+                            ).label
+                          }"`
+                    }
+                    variant="primary"
+                    onClick={() => {
+                      const nextSt = NEXT_ORDER_STATUS[inspectedOrder.status];
+                      if (nextSt) handleStepOrderStatus(inspectedOrder, nextSt);
                     }}
                   />
-                </div>
-              </div>
-            ) : (
-              <div className="astryx-card p-6 text-center text-sm text-coastal-slate">
-                {isEn
-                  ? 'This order contains standard ready-made blanks (no 3D shell attachments).'
-                  : 'Đơn hàng này gồm các sản phẩm phôi tiêu chuẩn (không đính phụ kiện Chế tác 3D).'}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+                )}
+              </HStack>
+            </LayoutFooter>
+          }
+        />
+      </Drawer>
 
-      {/* ===================================================================== */}
-      {/* MODAL 2: CREATE / EDIT PRODUCT (BR-09)                                */}
-      {/* ===================================================================== */}
-      {isProductModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-coastal-ink/70 p-4 overflow-y-auto"
-          role="dialog"
-          aria-modal="true"
-        >
-          <form
-            onSubmit={handleSaveProduct}
-            className="w-full max-w-xl astryx-bento bg-coastal-card p-6 shadow-xl space-y-4 max-h-[92vh] overflow-y-auto"
-          >
-            <div className="flex items-center justify-between border-b border-coastal-line pb-3">
-              <h3 className="font-serif text-lg font-semibold text-coastal-ink">
-                {editingProduct
+      {/* =================================================================== */}
+      {/* ASTRYX DIALOG: CREATE / EDIT PRODUCT + CLOUDINARY IMAGE FIELD       */}
+      {/* =================================================================== */}
+      <Dialog
+        isOpen={isProductModalOpen}
+        onOpenChange={setIsProductModalOpen}
+        purpose="form"
+        width={680}
+        maxHeight="88dvh"
+      >
+        <Layout
+          header={
+            <DialogHeader
+              title={
+                editingProduct
                   ? isEn
-                    ? 'Update 3D Product Blank'
-                    : 'Cập Nhật Phôi Sản Phẩm 3D'
+                    ? 'Update Product & Cloudinary Image'
+                    : 'Cập Nhật Sản Phẩm & Hình Ảnh Cloudinary'
                   : isEn
-                  ? 'Add New Product Blank'
-                  : 'Thêm Phôi Sản Phẩm Mới'}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setIsProductModalOpen(false)}
-                className="rounded-full p-1.5 text-coastal-slate hover:bg-coastal-mist"
-              >
-                <AppIcon name="x" className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-medium text-coastal-ink mb-1">
-                  {isEn ? 'Product Name *' : 'Tên sản phẩm *'}
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={prodForm.name}
-                  onChange={(e) => setProdForm({ ...prodForm, name: e.target.value })}
-                  className="w-full rounded-xl border border-coastal-line bg-coastal-bg px-3.5 py-2 text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-coastal-ink mb-1">
-                  {isEn ? 'Category' : 'Danh mục'}
-                </label>
-                <select
-                  value={prodForm.category}
-                  onChange={(e) =>
-                    setProdForm({ ...prodForm, category: e.target.value as ProductCategory })
-                  }
-                  className="w-full rounded-xl border border-coastal-line bg-coastal-bg px-3.5 py-2 text-sm"
-                >
-                  <option value="bag">Túi xách lưới (bag)</option>
-                  <option value="basket">Giỏ đựng đồ (basket)</option>
-                  <option value="wallet">Ví tiền (wallet)</option>
-                  <option value="apparel">Áo quần (apparel)</option>
-                  <option value="bracelet">Vòng tay (bracelet)</option>
-                  <option value="accessory">Phụ kiện (accessory)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-coastal-ink mb-1">
-                  Mesh Preset 3D (BR-09)
-                </label>
-                <select
-                  value={prodForm.meshPreset}
-                  onChange={(e) => setProdForm({ ...prodForm, meshPreset: e.target.value })}
-                  className="w-full rounded-xl border border-coastal-line bg-coastal-bg px-3.5 py-2 text-sm"
-                >
-                  <option value="tote_bag">tote_bag (Túi xách lưới)</option>
-                  <option value="market_basket">market_basket (Giỏ tròn đan lưới)</option>
-                  <option value="zip_wallet">zip_wallet (Ví cầm tay)</option>
-                  <option value="ocean_vest">ocean_vest (Áo khoác Upcycled)</option>
-                  <option value="braided_bracelet">braided_bracelet (Vòng tay dây lưới)</option>
-                  <option value="shell_charm_holder">shell_charm_holder (Móc khóa phao)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-coastal-ink mb-1">
-                  {isEn ? 'Base Price (VND)' : 'Giá phôi gốc (VNĐ)'}
-                </label>
-                <input
-                  type="number"
-                  required
-                  value={prodForm.basePrice}
-                  onChange={(e) => setProdForm({ ...prodForm, basePrice: Number(e.target.value) })}
-                  className="w-full rounded-xl border border-coastal-line bg-coastal-bg px-3.5 py-2 font-mono text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-coastal-ink mb-1">
-                  {isEn ? '3D Craft Fee (VND)' : 'Phí đan & khâu 3D (VNĐ)'}
-                </label>
-                <input
-                  type="number"
-                  required
-                  value={prodForm.craftFee}
-                  onChange={(e) => setProdForm({ ...prodForm, craftFee: Number(e.target.value) })}
-                  className="w-full rounded-xl border border-coastal-line bg-coastal-bg px-3.5 py-2 font-mono text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-coastal-ink mb-1">
-                  {isEn ? 'Blank Stock' : 'Tồn kho phôi'}
-                </label>
-                <input
-                  type="number"
-                  required
-                  value={prodForm.stock}
-                  onChange={(e) => setProdForm({ ...prodForm, stock: Number(e.target.value) })}
-                  className="w-full rounded-xl border border-coastal-line bg-coastal-bg px-3.5 py-2 font-mono text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-coastal-ink mb-1">
-                  {isEn ? 'Recovered Net Weight (grams)' : 'Lượng lưới thu hồi (gram)'}
-                </label>
-                <input
-                  type="number"
-                  value={prodForm.netWeightGrams}
-                  onChange={(e) =>
-                    setProdForm({ ...prodForm, netWeightGrams: Number(e.target.value) })
-                  }
-                  className="w-full rounded-xl border border-coastal-line bg-coastal-bg px-3.5 py-2 font-mono text-sm"
-                />
-              </div>
-
-              <div className="sm:col-span-2">
+                  ? 'Create New Product & Cloudinary Image'
+                  : 'Thêm Sản Phẩm Mới & Hình Ảnh Cloudinary'
+              }
+              subtitle={
+                isEn
+                  ? 'Product image is stored in the `image` field and uploaded to Cloudinary.'
+                  : 'Trường hình ảnh (`image`) của sản phẩm được đồng bộ trực tiếp với Cloudinary.'
+              }
+              onOpenChange={setIsProductModalOpen}
+            />
+          }
+          content={
+            <LayoutContent>
+              <VStack gap={4}>
+                {/* Cloudinary Image Uploader Field */}
                 <S3ImageUploader
                   folder="products"
-                  compact
-                  label={isEn ? 'Product Image (Upload to AWS S3)' : 'Ảnh đại diện sản phẩm (Tải lên AWS S3)'}
+                  label={
+                    isEn
+                      ? 'Product Image Field (`image` • Cloudinary Upload)'
+                      : 'Trường hình ảnh sản phẩm (`image` • Tải lên Cloudinary)'
+                  }
                   value={prodForm.imageUrl}
                   onChange={(newUrl) => setProdForm({ ...prodForm, imageUrl: newUrl })}
                 />
-              </div>
 
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-medium text-coastal-ink mb-1">
-                  {isEn
-                    ? 'External 3D .glb URL (Optional — BR-09)'
-                    : 'Đường dẫn file 3D `.glb` ngoài (Tùy chọn — BR-09)'}
-                </label>
-                <input
-                  type="text"
+                <Grid columns={2} gap={3}>
+                  <TextInput
+                    label={isEn ? 'Product Name' : 'Tên sản phẩm'}
+                    isRequired
+                    value={prodForm.name}
+                    onChange={(val) => setProdForm({ ...prodForm, name: val })}
+                    placeholder="Túi Xách Lưới Đại Dương Sơn Trà"
+                    width="100%"
+                  />
+
+                  <TextInput
+                    label="Slug URL"
+                    isOptional
+                    value={prodForm.slug}
+                    onChange={(val) => setProdForm({ ...prodForm, slug: val })}
+                    placeholder="tui-xach-luoi-dai-duong-son-tra"
+                    width="100%"
+                  />
+
+                  <Selector
+                    label={isEn ? 'Category' : 'Danh mục'}
+                    value={prodForm.category}
+                    onChange={(val) =>
+                      setProdForm({ ...prodForm, category: val as ProductCategory })
+                    }
+                    width="100%"
+                    options={[
+                      { value: 'bag', label: 'Túi xách lưới (bag)' },
+                      { value: 'basket', label: 'Giỏ đựng đồ (basket)' },
+                      { value: 'wallet', label: 'Ví tiền (wallet)' },
+                      { value: 'apparel', label: 'Áo quần (apparel)' },
+                      { value: 'bracelet', label: 'Vòng tay (bracelet)' },
+                      { value: 'accessory', label: 'Phụ kiện (accessory)' },
+                    ]}
+                  />
+
+                  <Selector
+                    label="Mesh Preset 3D (BR-09)"
+                    value={prodForm.meshPreset}
+                    onChange={(val) => setProdForm({ ...prodForm, meshPreset: val })}
+                    width="100%"
+                    options={[
+                      { value: 'tote_bag', label: 'tote_bag (Túi xách lưới)' },
+                      { value: 'market_basket', label: 'market_basket (Giỏ tròn đan lưới)' },
+                      { value: 'zip_wallet', label: 'zip_wallet (Ví cầm tay)' },
+                      { value: 'ocean_vest', label: 'ocean_vest (Áo khoác Upcycled)' },
+                      { value: 'braided_bracelet', label: 'braided_bracelet (Vòng tay dây lưới)' },
+                      { value: 'shell_charm_holder', label: 'shell_charm_holder (Móc khóa phao)' },
+                    ]}
+                  />
+
+                  <NumberInput
+                    label={isEn ? 'Base Price' : 'Giá phôi gốc'}
+                    value={prodForm.basePrice}
+                    onChange={(val) => setProdForm({ ...prodForm, basePrice: val ?? 0 })}
+                    min={0}
+                    step={10000}
+                    units="VNĐ"
+                    isWheelEnabled={false}
+                    width="100%"
+                  />
+
+                  <NumberInput
+                    label={isEn ? '3D Craft Fee' : 'Phí đan & khâu 3D'}
+                    value={prodForm.craftFee}
+                    onChange={(val) => setProdForm({ ...prodForm, craftFee: val ?? 0 })}
+                    min={0}
+                    step={5000}
+                    units="VNĐ"
+                    isWheelEnabled={false}
+                    width="100%"
+                  />
+
+                  <NumberInput
+                    label={isEn ? 'Blank Stock' : 'Tồn kho phôi'}
+                    value={prodForm.stock}
+                    onChange={(val) => setProdForm({ ...prodForm, stock: val ?? 0 })}
+                    min={0}
+                    step={1}
+                    isIntegerOnly
+                    units={t('common.pieces')}
+                    isWheelEnabled={false}
+                    width="100%"
+                  />
+
+                  <NumberInput
+                    label={isEn ? 'Recovered Net Weight' : 'Lượng lưới thu hồi'}
+                    value={prodForm.netWeightGrams}
+                    onChange={(val) => setProdForm({ ...prodForm, netWeightGrams: val ?? 0 })}
+                    min={0}
+                    step={10}
+                    units="gram"
+                    isWheelEnabled={false}
+                    width="100%"
+                  />
+                </Grid>
+
+                <TextInput
+                  label={
+                    isEn
+                      ? 'External 3D .glb URL (Optional — BR-09)'
+                      : 'Đường dẫn file 3D .glb ngoài (Tùy chọn — BR-09)'
+                  }
+                  isOptional
                   value={prodForm.glbUrl}
-                  onChange={(e) => setProdForm({ ...prodForm, glbUrl: e.target.value })}
+                  onChange={(val) => setProdForm({ ...prodForm, glbUrl: val })}
                   placeholder="/models/custom-bag.glb"
-                  className="w-full rounded-xl border border-coastal-line bg-coastal-bg px-3.5 py-2 text-sm"
+                  width="100%"
                 />
-              </div>
-            </div>
 
-            <div className="flex justify-end gap-2 pt-3 border-t border-coastal-line">
-              <button
-                type="button"
-                onClick={() => setIsProductModalOpen(false)}
-                className="rounded-full border border-coastal-line px-4 py-2 text-xs font-semibold text-coastal-ink"
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                type="submit"
-                className="astryx-btn-primary px-5 py-2 text-xs"
-              >
-                {isEn ? 'Save Product' : 'Lưu Sản Phẩm'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+                <TextArea
+                  label={isEn ? 'Short Description' : 'Mô tả ngắn sản phẩm'}
+                  value={prodForm.shortDescription}
+                  onChange={(val) => setProdForm({ ...prodForm, shortDescription: val })}
+                  rows={2}
+                  width="100%"
+                />
 
-      {/* ===================================================================== */}
-      {/* MODAL 3: CREATE / EDIT CUSTOM MATERIAL (VỎ SÒ / ỐC)                   */}
-      {/* ===================================================================== */}
-      {isMaterialModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-coastal-ink/70 p-4 overflow-y-auto"
-          role="dialog"
-          aria-modal="true"
-        >
-          <form
-            onSubmit={handleSaveMaterial}
-            className="w-full max-w-lg astryx-bento bg-coastal-card p-6 shadow-xl space-y-4 max-h-[92vh] overflow-y-auto"
-          >
-            <div className="flex items-center justify-between border-b border-coastal-line pb-3">
-              <h3 className="font-serif text-lg font-semibold text-coastal-ink">
-                {editingMaterial
+                <Switch
+                  label={
+                    isEn
+                      ? 'Allow 3D Studio Customization'
+                      : 'Cho phép khách tùy biến đính ốc trong 3D Studio'
+                  }
+                  value={prodForm.isCustomizable}
+                  onChange={(checked) => setProdForm({ ...prodForm, isCustomizable: checked })}
+                />
+              </VStack>
+            </LayoutContent>
+          }
+          footer={
+            <LayoutFooter>
+              <HStack gap={2} hAlign="end">
+                <Button
+                  label={t('common.cancel')}
+                  variant="secondary"
+                  onClick={() => setIsProductModalOpen(false)}
+                />
+                <Button
+                  label={isEn ? 'Save Product' : 'Lưu sản phẩm'}
+                  variant="primary"
+                  onClick={handleSaveProduct}
+                />
+              </HStack>
+            </LayoutFooter>
+          }
+        />
+      </Dialog>
+
+      {/* =================================================================== */}
+      {/* ASTRYX DIALOG: CREATE / EDIT CUSTOM MATERIAL (VỎ SÒ / ỐC BOM)       */}
+      {/* =================================================================== */}
+      <Dialog
+        isOpen={isMaterialModalOpen}
+        onOpenChange={setIsMaterialModalOpen}
+        purpose="form"
+        width={620}
+        maxHeight="85dvh"
+      >
+        <Layout
+          header={
+            <DialogHeader
+              title={
+                editingMaterial
                   ? isEn
                     ? 'Update Shell / Snail Material'
-                    : 'Cập Nhật Nguyên Liệu Vỏ Sò / Ốc'
+                    : 'Cập Nhật Nguyên Liệu Vỏ Sò / Ốc Biển'
                   : isEn
                   ? 'Add New Marine Accessory'
-                  : 'Thêm Phụ Kiện Biển Mới'}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setIsMaterialModalOpen(false)}
-                className="rounded-full p-1.5 text-coastal-slate hover:bg-coastal-mist"
-              >
-                <AppIcon name="x" className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-medium text-coastal-ink mb-1">
-                  {isEn ? 'Shell / Snail / Charm Name *' : 'Tên vỏ sò / ốc / charm *'}
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={matForm.name}
-                  onChange={(e) => setMatForm({ ...matForm, name: e.target.value })}
-                  className="w-full rounded-xl border border-coastal-line bg-coastal-bg px-3.5 py-2 text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-coastal-ink mb-1">
-                  {isEn ? 'Group' : 'Nhóm'}
-                </label>
-                <select
-                  value={matForm.materialType}
-                  onChange={(e) =>
-                    setMatForm({ ...matForm, materialType: e.target.value as MaterialCategory })
-                  }
-                  className="w-full rounded-xl border border-coastal-line bg-coastal-bg px-3.5 py-2 text-sm"
-                >
-                  <option value="shell">Vỏ sò (shell)</option>
-                  <option value="snail">Ốc biển (snail)</option>
-                  <option value="charm">Charm biển (charm)</option>
-                  <option value="bead">Ngọc trai / Hạt (bead)</option>
-                  <option value="cord">Nút dây lưới (cord)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-coastal-ink mb-1">
-                  Mesh Preset 3D
-                </label>
-                <select
-                  value={matForm.meshPreset}
-                  onChange={(e) => setMatForm({ ...matForm, meshPreset: e.target.value })}
-                  className="w-full rounded-xl border border-coastal-line bg-coastal-bg px-3.5 py-2 text-sm"
-                >
-                  <option value="scallop_shell">scallop_shell (Vỏ sò điệp)</option>
-                  <option value="cowrie_shell">cowrie_shell (Ốc sứ)</option>
-                  <option value="spiral_snail">spiral_snail (Ốc xoắn)</option>
-                  <option value="conch_snail">conch_snail (Ốc xà cừ)</option>
-                  <option value="starfish_charm">starfish_charm (Sao biển)</option>
-                  <option value="turtle_charm">turtle_charm (Rùa biển)</option>
-                  <option value="pearl_bead">pearl_bead (Ngọc trai)</option>
-                  <option value="fishing_cord">fishing_cord (Nút dây lưới)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-coastal-ink mb-1">
-                  {isEn ? 'Unit Price (VND/pc)' : 'Đơn giá đính (VNĐ/cái)'}
-                </label>
-                <input
-                  type="number"
-                  required
-                  value={matForm.unitPrice}
-                  onChange={(e) => setMatForm({ ...matForm, unitPrice: Number(e.target.value) })}
-                  className="w-full rounded-xl border border-coastal-line bg-coastal-bg px-3.5 py-2 font-mono text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-coastal-ink mb-1">
-                  {isEn ? 'Stock Quantity (pcs)' : 'Số lượng tồn kho (cái)'}
-                </label>
-                <input
-                  type="number"
-                  required
-                  value={matForm.stockQuantity}
-                  onChange={(e) =>
-                    setMatForm({ ...matForm, stockQuantity: Number(e.target.value) })
-                  }
-                  className="w-full rounded-xl border border-coastal-line bg-coastal-bg px-3.5 py-2 font-mono text-sm"
-                />
-              </div>
-
-              <div className="sm:col-span-2">
+                  : 'Thêm Phụ Kiện Biển Mới'
+              }
+              onOpenChange={setIsMaterialModalOpen}
+            />
+          }
+          content={
+            <LayoutContent>
+              <VStack gap={4}>
                 <S3ImageUploader
                   folder="materials"
                   compact
                   label={
                     isEn
-                      ? 'Shell / Snail / Charm Image (Upload to AWS S3)'
-                      : 'Ảnh vỏ sò / ốc biển / charm (Tải lên AWS S3)'
+                      ? 'Shell / Snail Image (Cloudinary Upload)'
+                      : 'Hình ảnh vỏ sò / ốc biển (Tải lên Cloudinary)'
                   }
                   value={matForm.thumbnail}
                   onChange={(newUrl) => setMatForm({ ...matForm, thumbnail: newUrl })}
                 />
-              </div>
-            </div>
 
-            <div className="flex justify-end gap-2 pt-3 border-t border-coastal-line">
-              <button
-                type="button"
-                onClick={() => setIsMaterialModalOpen(false)}
-                className="rounded-full border border-coastal-line px-4 py-2 text-xs font-semibold text-coastal-ink"
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                type="submit"
-                className="astryx-btn-leaf px-5 py-2 text-xs"
-              >
-                {isEn ? 'Save Material' : 'Lưu Nguyên Liệu'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+                <Grid columns={2} gap={3}>
+                  <TextInput
+                    label={isEn ? 'Material Name' : 'Tên vỏ sò / ốc / charm'}
+                    isRequired
+                    value={matForm.name}
+                    onChange={(val) => setMatForm({ ...matForm, name: val })}
+                    width="100%"
+                  />
 
-      {/* Confirm Delete Modal */}
-      <ModalConfirm
+                  <Selector
+                    label={isEn ? 'Material Group' : 'Nhóm phụ kiện'}
+                    value={matForm.materialType}
+                    onChange={(val) =>
+                      setMatForm({ ...matForm, materialType: val as MaterialCategory })
+                    }
+                    width="100%"
+                    options={[
+                      { value: 'shell', label: 'Vỏ sò (shell)' },
+                      { value: 'snail', label: 'Ốc biển (snail)' },
+                      { value: 'charm', label: 'Charm biển (charm)' },
+                      { value: 'bead', label: 'Ngọc trai / Hạt (bead)' },
+                      { value: 'cord', label: 'Nút dây lưới (cord)' },
+                    ]}
+                  />
+
+                  <Selector
+                    label="Mesh Preset 3D"
+                    value={matForm.meshPreset}
+                    onChange={(val) => setMatForm({ ...matForm, meshPreset: val })}
+                    width="100%"
+                    options={[
+                      { value: 'scallop_shell', label: 'scallop_shell (Vỏ sò điệp)' },
+                      { value: 'cowrie_shell', label: 'cowrie_shell (Ốc sứ)' },
+                      { value: 'spiral_snail', label: 'spiral_snail (Ốc xoắn)' },
+                      { value: 'conch_snail', label: 'conch_snail (Ốc xà cừ)' },
+                      { value: 'starfish_charm', label: 'starfish_charm (Sao biển)' },
+                      { value: 'turtle_charm', label: 'turtle_charm (Rùa biển)' },
+                      { value: 'pearl_bead', label: 'pearl_bead (Ngọc trai)' },
+                      { value: 'fishing_cord', label: 'fishing_cord (Nút dây lưới)' },
+                    ]}
+                  />
+
+                  <NumberInput
+                    label={isEn ? 'Unit Price' : 'Đơn giá đính 3D'}
+                    value={matForm.unitPrice}
+                    onChange={(val) => setMatForm({ ...matForm, unitPrice: val ?? 0 })}
+                    min={0}
+                    step={1000}
+                    units="VNĐ"
+                    isWheelEnabled={false}
+                    width="100%"
+                  />
+
+                  <NumberInput
+                    label={isEn ? 'Stock Quantity (BR-04)' : 'Số lượng tồn kho (BR-04)'}
+                    value={matForm.stockQuantity}
+                    onChange={(val) => setMatForm({ ...matForm, stockQuantity: val ?? 0 })}
+                    min={0}
+                    step={1}
+                    isIntegerOnly
+                    units={t('common.pieces')}
+                    isWheelEnabled={false}
+                    width="100%"
+                  />
+
+                  <TextInput
+                    label={isEn ? 'Color Hex' : 'Mã màu Hex 3D'}
+                    value={matForm.colorHex}
+                    onChange={(val) => setMatForm({ ...matForm, colorHex: val })}
+                    width="100%"
+                  />
+                </Grid>
+              </VStack>
+            </LayoutContent>
+          }
+          footer={
+            <LayoutFooter>
+              <HStack gap={2} hAlign="end">
+                <Button
+                  label={t('common.cancel')}
+                  variant="secondary"
+                  onClick={() => setIsMaterialModalOpen(false)}
+                />
+                <Button
+                  label={isEn ? 'Save Material' : 'Lưu nguyên liệu'}
+                  variant="primary"
+                  onClick={handleSaveMaterial}
+                />
+              </HStack>
+            </LayoutFooter>
+          }
+        />
+      </Dialog>
+
+      {/* =================================================================== */}
+      {/* ASTRYX ALERT DIALOG: CONFIRM DELETE                                 */}
+      {/* =================================================================== */}
+      <AlertDialog
         isOpen={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
         title={
           isEn
             ? `Delete ${deleteTarget?.type === 'product' ? 'product' : 'material'}?`
@@ -1601,14 +1959,15 @@ export default function AdminCmsPage() {
             ? `Are you sure you want to delete "${deleteTarget?.name}" from the catalog?`
             : `Bạn có chắc chắn muốn xóa "${deleteTarget?.name}" khỏi danh mục hệ thống?`
         }
-        confirmLabel={t('common.confirm')}
+        actionLabel={
+          isEn
+            ? `Delete ${deleteTarget?.type === 'product' ? 'product' : 'material'}`
+            : `Xóa ${deleteTarget?.type === 'product' ? 'sản phẩm' : 'nguyên liệu'}`
+        }
         cancelLabel={t('common.cancel')}
-        variant="danger"
-        onConfirm={handleConfirmDelete}
-        onCancel={() => setDeleteTarget(null)}
+        actionVariant="destructive"
+        onAction={handleConfirmDelete}
       />
-
-      <AppFooter />
-    </div>
+    </Theme>
   );
 }

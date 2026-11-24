@@ -1,11 +1,16 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  experimental: {
-    externalDir: true,
-  },
   images: {
     remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'res.cloudinary.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '**.cloudinary.com',
+      },
       {
         protocol: 'https',
         hostname: 'dtu-img-db-868017909899-ap-southeast-2-an.s3.ap-southeast-2.amazonaws.com',

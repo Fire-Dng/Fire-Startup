@@ -397,7 +397,8 @@ const createOrder = async (payload, user = null, lang = 'vi') => {
     throw deductErr;
   }
 
-  const shippingFee = subtotal >= 500000 ? 0 : 30000;
+  const shippingFee =
+    subtotal >= env.FREE_SHIPPING_THRESHOLD ? 0 : env.DEFAULT_SHIPPING_FEE;
   const totalAmount = subtotal + shippingFee;
   const orderCode = await generateOrderCode();
   const normalizedMethod = paymentMethod === 'vietqr' ? 'vietqr' : 'cod';

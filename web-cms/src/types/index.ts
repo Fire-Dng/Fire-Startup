@@ -32,8 +32,10 @@ export type MediaStorageFolder =
   | 'custom-previews';
 
 export interface MediaStorageStatus {
-  storageMode: 's3' | 'local-fallback';
-  isS3Configured: boolean;
+  storageMode: 'cloudinary' | 'local-fallback';
+  provider?: 'cloudinary' | 'local';
+  isCloudinaryConfigured?: boolean;
+  cloudName?: string;
   bucket: string;
   region: string;
   publicBaseUrl: string;
@@ -43,9 +45,11 @@ export interface MediaStorageStatus {
 
 export interface MediaUploadResult {
   url: string;
+  publicUrl?: string;
   key: string;
+  publicId?: string;
   folder: string;
-  storageMode: 's3' | 'local-fallback';
+  storageMode: 'cloudinary' | 'local-fallback';
   contentType: string;
   size?: number;
 }
@@ -92,6 +96,9 @@ export interface Product {
   basePrice: number;
   craftFee: number;
   stock: number;
+  image?: string;
+  imageUrl?: string;
+  imagePublicId?: string;
   images: string[];
   thumbnail?: string;
   isCustomizable: boolean;

@@ -11,7 +11,6 @@ set -e
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="${ROOT_DIR}/backend"
-FRONTEND_V2_DIR="${ROOT_DIR}/frontend_v2"
 WEB_STORE_DIR="${ROOT_DIR}/web-store"
 WEB_CMS_DIR="${ROOT_DIR}/web-cms"
 
@@ -77,11 +76,22 @@ SEED_ADMIN_EMAIL=admin@dtu-upcycled.vn
 SEED_STAFF_EMAIL=artisan@dtu-upcycled.vn
 SEED_CUSTOMER_EMAIL=customer@dtu-upcycled.vn
 SEED_DEFAULT_PASSWORD=Password123!
+# Cloudinary Media Storage
+CLOUDINARY_URL=
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
+CLOUDINARY_FOLDER_PREFIX=wavo
+CLOUDINARY_UPLOAD_PRESET=
+
+# Shipping & Order Pricing Rules
+FREE_SHIPPING_THRESHOLD=500000
+DEFAULT_SHIPPING_FEE=30000
 EOF
   fi
 
-  if [[ -d "${FRONTEND_V2_DIR}" ]] && [[ ! -f "${FRONTEND_V2_DIR}/.env.local" ]]; then
-    echo "VITE_API_BASE_URL=http://localhost:${BACKEND_PORT}/api" > "${FRONTEND_V2_DIR}/.env.local"
+  if [[ -d "${WEB_STORE_DIR}" ]] && [[ ! -f "${WEB_STORE_DIR}/.env.local" ]]; then
+    echo "VITE_API_BASE_URL=http://localhost:${BACKEND_PORT}/api" > "${WEB_STORE_DIR}/.env.local"
   fi
 
   if [[ -d "${WEB_CMS_DIR}" ]] && [[ ! -f "${WEB_CMS_DIR}/.env.local" ]]; then
@@ -89,15 +99,11 @@ EOF
 NEXT_PUBLIC_API_URL=http://localhost:${BACKEND_PORT}/api
 NEXT_PUBLIC_STORE_URL=http://localhost:${STORE_PORT}
 NEXT_PUBLIC_CMS_URL=http://localhost:${CMS_PORT}
-NEXT_PUBLIC_S3_BASE_URL=https://dtu-img-db-868017909899-ap-southeast-2-an.s3.ap-southeast-2.amazonaws.com
+NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=
+NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET=
+NEXT_PUBLIC_DEFAULT_ADMIN_EMAIL=admin@dtu-upcycled.vn
+NEXT_PUBLIC_DEFAULT_ADMIN_PASSWORD=Password123!
 EOF
-  fi
-}
-
-ensure_symlinks() {
-  if [[ -L "${WEB_STORE_DIR}" ]] || [[ ! -e "${WEB_STORE_DIR}" ]]; then
-    rm -f "${WEB_STORE_DIR}"
-    ln -s "frontend_v2" "${WEB_STORE_DIR}"
   fi
 }
 
@@ -109,10 +115,10 @@ ensure_dependencies() {
     (cd "${BACKEND_DIR}" && npm install --silent)
   fi
 
-  if [[ -d "${FRONTEND_V2_DIR}" ]]; then
-    if [[ "${force_install}" == "true" ]] || [[ ! -d "${FRONTEND_V2_DIR}/node_modules" ]]; then
+  if [[ -d "${WEB_STORE_DIR}" ]]; then
+    if [[ "${force_install}" == "true" ]] || [[ ! -d "${WEB_STORE_DIR}/node_modules" ]]; then
       echo -e "${CYAN}📦 Đang cài đặt Web Store...${NC}"
-      (cd "${FRONTEND_V2_DIR}" && npm install --silent)
+      (cd "${WEB_STORE_DIR}" && npm install --silent)
     fi
   fi
 
@@ -125,8 +131,6 @@ ensure_dependencies() {
       (cd "${WEB_CMS_DIR}" && npm install --silent)
     fi
   fi
-
-  ensure_symlinks
 }
 
 free_port_if_busy() {
@@ -205,9 +209,9 @@ case "${MODE}" in
     ensure_dependencies "false"
     echo -e "${CYAN}🧪 [1/3] Kiểm thử Backend API...${NC}"
     (cd "${BACKEND_DIR}" && npm test && npm run seed)
-    if [[ -d "${FRONTEND_V2_DIR}" ]]; then
+    if [[ -d "${WEB_STORE_DIR}" ]]; then
       echo -e "${CYAN}🏗  [2/3] Build Web Store...${NC}"
-      (cd "${FRONTEND_V2_DIR}" && npm run build)
+      (cd "${WEB_STORE_DIR}" && npm run build)
     fi
     if [[ -d "${WEB_CMS_DIR}" ]]; then
       echo -e "${CYAN}🏗  [3/3] Build Web CMS...${NC}"
@@ -235,8 +239,8 @@ case "${MODE}" in
     (cd "${BACKEND_DIR}" && PORT="${BACKEND_PORT}" npm start > "${ROOT_DIR}/.logs/backend.log" 2>&1) &
     BACKEND_PID=$!
 
-    if [[ -d "${FRONTEND_V2_DIR}" ]]; then
-      (cd "${FRONTEND_V2_DIR}" && npx vite --port "${STORE_PORT}" --host 0.0.0.0 > "${ROOT_DIR}/.logs/store.log" 2>&1) &
+    if [[ -d "${WEB_STORE_DIR}" ]]; then
+      (cd "${WEB_STORE_DIR}" && npx vite --port "${STORE_PORT}" --host 0.0.0.0 > "${ROOT_DIR}/.logs/store.log" 2>&1) &
       STORE_PID=$!
     fi
 

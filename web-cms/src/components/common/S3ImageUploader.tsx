@@ -1,7 +1,15 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
-import { AppIcon } from '@/components/ui/AppIcon';
+import { Badge } from '@astryxdesign/core/Badge';
+import { Button } from '@astryxdesign/core/Button';
+import { Card } from '@astryxdesign/core/Card';
+import { HStack } from '@astryxdesign/core/HStack';
+import { Icon } from '@astryxdesign/core/Icon';
+import { StackItem } from '@astryxdesign/core/Stack';
+import { Text } from '@astryxdesign/core/Text';
+import { TextInput } from '@astryxdesign/core/TextInput';
+import { VStack } from '@astryxdesign/core/VStack';
 import { uploadMediaFile } from '@/lib/api';
 import { resolveAssetUrl, ASSETS } from '@/config/assets';
 import type { MediaStorageFolder } from '@/types';
@@ -22,14 +30,16 @@ export function S3ImageUploader({
   folder,
   label,
   compact = false,
-  className = '',
 }: S3ImageUploaderProps) {
-  const { t } = useI18n();
+  const { locale } = useI18n();
+  const isEn = locale === 'en';
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [storageMode, setStorageMode] = useState<'s3' | 'local-fallback' | null>(
-    value?.includes('.amazonaws.com') || value?.includes('s3.') ? 's3' : null
+  const [storageMode, setStorageMode] = useState<'cloudinary' | 'local-fallback' | null>(
+    value?.includes('res.cloudinary.com') || value?.includes('cloudinary.com')
+      ? 'cloudinary'
+      : null
   );
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
 
@@ -43,8 +53,12 @@ export function S3ImageUploader({
       const result = await uploadMediaFile(file, folder);
       onChange(result.url);
       setStorageMode(result.storageMode);
-      setUploadNotice(t('cms.s3UploadSuccess'));
-      setTimeout(() => setUploadNotice(null), 3200);
+      setUploadNotice(
+        isEn
+          ? `Uploaded to ${result.storageMode === 'cloudinary' ? 'Cloudinary' : 'Media Storage'}`
+          : `Đã tải ảnh lên ${result.storageMode === 'cloudinary' ? 'Cloudinary' : 'Kho lưu trữ'}`
+      );
+      setTimeout(() => setUploadNotice(null), 3500);
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) {
@@ -62,11 +76,10 @@ export function S3ImageUploader({
     }
   };
 
-  const isS3Url =
-    storageMode === 's3' ||
-    value?.includes('amazonaws.com') ||
-    value?.includes('cloudfront.net') ||
-    value?.includes('/s3/');
+  const isCloudinaryUrl =
+    storageMode === 'cloudinary' ||
+    value?.includes('res.cloudinary.com') ||
+    value?.includes('cloudinary.com');
 
   return (
     <div
@@ -76,122 +89,110 @@ export function S3ImageUploader({
       }}
       onDragLeave={() => setIsDragging(false)}
       onDrop={handleDrop}
-      className={`rounded-2xl border p-3.5 transition-all ${
-        isDragging
-          ? 'border-coastal-kelp bg-coastal-mist/80 ring-2 ring-coastal-kelp/25'
-          : 'border-coastal-line bg-coastal-card shadow-coastal'
-      } ${className}`}
     >
-      {/* Header Row: Label + S3 Bucket / Folder Pill */}
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
-        {label ? (
-          <span className="text-xs font-bold text-coastal-ink">{label}</span>
-        ) : (
-          <span className="inline-flex items-center gap-1.5 font-mono text-[11px] font-semibold text-coastal-slate">
-            <AppIcon name="folder" className="h-3.5 w-3.5 text-coastal-kelp" />
-            {t('cms.s3FolderLabel')} <strong className="text-coastal-ink">s3://{folder}/</strong>
-          </span>
-        )}
-
-        <span
-          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider ${
-            isS3Url
-              ? 'border-coastal-border bg-coastal-stone text-coastal-deep'
-              : 'border-coastal-line bg-coastal-mist text-coastal-kelp'
-          }`}
-        >
-          <AppIcon name="cloud" className="h-3 w-3" />
-          {isS3Url ? 'AWS S3' : `S3 / ${folder}`}
-        </span>
-      </div>
-
-      {/* Main Content: Concentric Image Preview + Upload Controls */}
-      <div
-        className={`grid gap-3.5 ${
-          compact ? 'grid-cols-1 sm:grid-cols-12 items-center' : 'grid-cols-1 sm:grid-cols-12 items-start'
-        }`}
-      >
-        {/* Image Preview Frame */}
-        <div
-          className={`relative overflow-hidden rounded-xl border border-coastal-line/80 bg-coastal-mist ${
-            compact ? 'h-20 sm:col-span-3' : 'aspect-[16/10] sm:col-span-4'
-          }`}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={resolvedPreview}
-            alt={label || t('cms.s3PreviewAlt')}
-            className="h-full w-full object-cover"
-          />
-
-          {value && (
-            <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
-              <a
-                href={resolvedPreview}
-                target="_blank"
-                rel="noreferrer"
-                title={t('cms.s3OpenImage')}
-                className="flex h-6 w-6 items-center justify-center rounded-full bg-coastal-card/90 text-coastal-ink shadow-coastal hover:bg-coastal-kelp hover:text-coastal-card transition-colors"
-              >
-                <AppIcon name="externalLink" className="h-3 w-3" />
-              </a>
-            </div>
-          )}
-        </div>
-
-        {/* Upload Button + Direct URL Input */}
-        <div className={`space-y-2.5 ${compact ? 'sm:col-span-9' : 'sm:col-span-8'}`}>
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/avif,image/gif"
-              onChange={(e) => handleFileUpload(e.target.files?.[0])}
-              className="hidden"
+      <Card variant={isDragging ? 'muted' : 'default'}>
+        <VStack gap={3}>
+          <HStack gap={2} vAlign="center" hAlign="between" wrap="wrap">
+            <Text type="label">
+              {label ||
+                (isEn
+                  ? `Product Image (Cloudinary / ${folder})`
+                  : `Hình ảnh sản phẩm (Cloudinary / ${folder})`)}
+            </Text>
+            <Badge
+              variant={isCloudinaryUrl ? 'blue' : 'neutral'}
+              label={
+                isCloudinaryUrl
+                  ? `Cloudinary • ${folder}`
+                  : `Cloudinary Media • ${folder}`
+              }
             />
+          </HStack>
 
-            <button
-              type="button"
-              disabled={isUploading}
-              onClick={() => fileInputRef.current?.click()}
-              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-coastal-kelp to-coastal-rust px-4 py-2 text-xs font-semibold text-coastal-card shadow-coastal hover:opacity-95 disabled:opacity-60 transition-all"
+          <HStack gap={3} vAlign="start" wrap="wrap">
+            <div
+              style={{
+                width: compact ? 88 : 120,
+                height: compact ? 88 : 100,
+                borderRadius: 10,
+                overflow: 'hidden',
+                flexShrink: 0,
+                border: '1px solid var(--color-border)',
+                background: 'var(--color-background-surface)',
+              }}
             >
-              <AppIcon
-                name={isUploading ? 'loader' : 'cloudUpload'}
-                className={`h-3.5 w-3.5 ${isUploading ? 'animate-spin' : ''}`}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={resolvedPreview}
+                alt={label || 'Preview'}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
               />
-              {isUploading ? t('cms.s3Uploading') : t('cms.s3UploadBtn')}
-            </button>
+            </div>
 
-            {uploadNotice && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-coastal-border bg-coastal-stone px-2.5 py-1 text-[11px] font-semibold text-coastal-deep">
-                <AppIcon name="checkCircle" className="h-3.5 w-3.5 text-coastal-rust-hover" />
-                {uploadNotice}
-              </span>
-            )}
-          </div>
+            <StackItem size="fill">
+              <VStack gap={2}>
+                <HStack gap={2} vAlign="center" wrap="wrap">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/avif,image/gif"
+                    onChange={(e) => handleFileUpload(e.target.files?.[0])}
+                    style={{ display: 'none' }}
+                  />
+                  <Button
+                    label={
+                      isUploading
+                        ? isEn
+                          ? 'Uploading to Cloudinary...'
+                          : 'Đang tải lên Cloudinary...'
+                        : isEn
+                        ? 'Upload Image to Cloudinary'
+                        : 'Tải ảnh lên Cloudinary'
+                    }
+                    variant="secondary"
+                    size="sm"
+                    icon={<Icon icon="upload" />}
+                    isLoading={isUploading}
+                    onClick={() => fileInputRef.current?.click()}
+                  />
+                  {value && (
+                    <Button
+                      label={isEn ? 'Open original' : 'Mở ảnh gốc'}
+                      variant="ghost"
+                      size="sm"
+                      icon={<Icon icon="externalLink" />}
+                      href={resolvedPreview}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    />
+                  )}
+                  {uploadNotice && <Badge variant="green" label={uploadNotice} />}
+                </HStack>
 
-          <div className="relative">
-            <AppIcon
-              name="link"
-              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-coastal-muted"
-            />
-            <input
-              type="url"
-              value={value || ''}
-              onChange={(e) => onChange(e.target.value)}
-              placeholder={t('cms.s3UrlPlaceholder')}
-              className="w-full rounded-full border border-coastal-line bg-coastal-bg pl-9 pr-4 py-1.5 font-mono text-xs text-coastal-ink placeholder:text-coastal-muted focus:border-coastal-kelp focus:bg-coastal-card focus:outline-none transition-all"
-            />
-          </div>
+                <TextInput
+                  type="url"
+                  size="sm"
+                  label={isEn ? 'Direct Image URL (Cloudinary / CDN)' : 'Đường dẫn URL hình ảnh (Cloudinary / CDN)'}
+                  isLabelHidden
+                  value={value || ''}
+                  onChange={(val) => onChange(val)}
+                  placeholder="https://res.cloudinary.com/<cloud_name>/image/upload/..."
+                  hasClear
+                  width="100%"
+                />
 
-          {!compact && (
-            <p className="text-[11px] text-coastal-muted leading-snug">
-              {t('cms.s3DropHint')}
-            </p>
-          )}
-        </div>
-      </div>
+                {!compact && (
+                  <Text type="supporting">
+                    {isEn
+                      ? 'Drag & drop an image file here or click Upload to store directly on Cloudinary (/api/media/upload).'
+                      : 'Kéo thả tệp ảnh vào khung này hoặc bấm nút tải lên để lưu trực tiếp lên Cloudinary (/api/media/upload).'}
+                  </Text>
+                )}
+              </VStack>
+            </StackItem>
+          </HStack>
+        </VStack>
+      </Card>
     </div>
   );
 }

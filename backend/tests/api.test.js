@@ -26,6 +26,8 @@ const requestJson = async (method, path, body = null, token = null) => {
   return { status: res.status, body: data };
 };
 
+const env = require('../src/config/env');
+
 test.before(async () => {
   await connectDB();
   await seedDatabase({ force: true });
@@ -37,16 +39,16 @@ test.before(async () => {
   // Pre-authenticate Admin, Staff (Artisan), and Customer tokens for RBAC & CMS tests
   const [adminLogin, staffLogin, customerLogin] = await Promise.all([
     requestJson('POST', '/api/auth/login', {
-      email: 'admin@dtu-upcycled.vn',
-      password: 'Password123!',
+      email: env.SEED_ADMIN_EMAIL,
+      password: env.SEED_DEFAULT_PASSWORD,
     }),
     requestJson('POST', '/api/auth/login', {
-      email: 'artisan@dtu-upcycled.vn',
-      password: 'Password123!',
+      email: env.SEED_STAFF_EMAIL,
+      password: env.SEED_DEFAULT_PASSWORD,
     }),
     requestJson('POST', '/api/auth/login', {
-      email: 'customer@dtu-upcycled.vn',
-      password: 'Password123!',
+      email: env.SEED_CUSTOMER_EMAIL,
+      password: env.SEED_DEFAULT_PASSWORD,
     }),
   ]);
 
@@ -671,12 +673,12 @@ test('TC-07: Multi-language i18n (?lang=vi vs ?lang=en & Accept-Language) & Zero
   assert.ok(i18nMessages.MESSAGES.vi && i18nMessages.MESSAGES.en);
 });
 
-test('TC-08: Hybrid AWS S3 Media Upload, Presigned URL, MIME Security & Landing Image CMS Update', async () => {
+test('TC-08: Cloudinary Media Upload, Signed Upload Params, MIME Security & Landing Image CMS Update', async () => {
   // 1. Check Media Storage Status (GET /api/media/status)
   const statusRes = await requestJson('GET', '/api/media/status');
   assert.equal(statusRes.status, 200);
   assert.equal(statusRes.body.success, true);
-  assert.ok(['s3', 'local-fallback'].includes(statusRes.body.data.storageMode));
+  assert.ok(['cloudinary', 'local-fallback'].includes(statusRes.body.data.storageMode));
   assert.ok(statusRes.body.data.folders.includes('landing'));
   assert.ok(statusRes.body.data.folders.includes('products'));
   assert.ok(statusRes.body.data.folders.includes('materials'));

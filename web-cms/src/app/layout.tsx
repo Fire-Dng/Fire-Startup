@@ -28,9 +28,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'NetLoop CMS | Hệ Thống Quản Trị Xưởng Thủ Công & Máy Trạm 3D Inspector (Port 3002)',
+  title: 'NetLoop CMS | Hệ Thống Quản Trị Xưởng Thủ Công & Máy Trạm 3D Inspector (Astryx Neutral)',
   description:
-    'Ứng dụng Web CMS độc lập dành riêng cho quản trị viên và nghệ nhân đan lưới: Quản lý đơn hàng, Phiếu chế tác 3D Inspector, Kho vỏ sò BOM và Sản phẩm.',
+    'Ứng dụng Web CMS độc lập thiết kế bằng Astryx Design System (Neutral Theme): Quản lý đơn hàng, Phiếu chế tác 3D Inspector, Kho vỏ sò BOM và Sản phẩm Cloudinary.',
 };
 
 export default function CmsRootLayout({
@@ -43,7 +43,7 @@ export default function CmsRootLayout({
       lang="vi"
       className={`${beVietnamPro.variable} ${plusJakarta.variable} ${jetbrainsMono.variable}`}
     >
-      <body className="min-h-screen flex flex-col bg-coastal-bg text-coastal-ink antialiased selection:bg-coastal-kelp selection:text-coastal-card">
+      <body className="min-h-screen antialiased">
         <I18nProvider>
           <CartProvider>{children}</CartProvider>
         </I18nProvider>

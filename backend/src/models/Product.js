@@ -53,6 +53,18 @@ const productSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    image: {
+      type: String,
+      default: '',
+    },
+    imageUrl: {
+      type: String,
+      default: '',
+    },
+    imagePublicId: {
+      type: String,
+      default: '',
+    },
     thumbnail: {
       type: String,
       default: '',
@@ -151,6 +163,25 @@ const productSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Keep image, imageUrl, thumbnail, and images[0] synchronized automatically
+productSchema.pre('save', function syncProductImages(next) {
+  const primaryImage =
+    this.image ||
+    this.imageUrl ||
+    this.thumbnail ||
+    (Array.isArray(this.images) && this.images.length > 0 ? this.images[0] : '');
+
+  if (primaryImage) {
+    if (!this.image) this.image = primaryImage;
+    if (!this.imageUrl) this.imageUrl = primaryImage;
+    if (!this.thumbnail) this.thumbnail = primaryImage;
+    if (!Array.isArray(this.images) || this.images.length === 0) {
+      this.images = [primaryImage];
+    }
+  }
+  next();
+});
 
 // ESR Compound Indexes
 productSchema.index({ category: 1, isActive: 1, isCustomizable: 1 });

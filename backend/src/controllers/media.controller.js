@@ -3,7 +3,7 @@ const {
   createPresignedUploadUrl,
   uploadMediaBuffer,
   deleteMediaObject,
-} = require('../services/s3.service');
+} = require('../services/cloudinary.service');
 const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
 const { sendSuccess } = require('../utils/apiResponse');

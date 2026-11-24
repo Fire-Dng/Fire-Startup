@@ -779,11 +779,13 @@ export async function getMediaStatus(): Promise<MediaStorageStatus> {
     // Fallback status when backend is offline
   }
   return {
-    storageMode: 's3',
-    isS3Configured: true,
-    bucket: 'dtu-img-db-868017909899-ap-southeast-2-an',
-    region: 'ap-southeast-2',
-    publicBaseUrl: ENV.S3_BASE_URL,
+    storageMode: ENV.CLOUDINARY_CLOUD_NAME ? 'cloudinary' : 'local-fallback',
+    provider: ENV.CLOUDINARY_CLOUD_NAME ? 'cloudinary' : 'local',
+    isCloudinaryConfigured: Boolean(ENV.CLOUDINARY_CLOUD_NAME),
+    cloudName: ENV.CLOUDINARY_CLOUD_NAME,
+    bucket: ENV.CLOUDINARY_CLOUD_NAME || 'cloudinary-media',
+    region: 'global-cdn',
+    publicBaseUrl: ENV.MEDIA_BASE_URL,
     maxFileSizeMb: 10,
     folders: ['landing', 'products', 'materials', 'custom-previews'],
   };
@@ -812,11 +814,43 @@ export async function uploadMediaFile(
     });
 
     const json = await res.json().catch(() => ({}));
-    if (res.ok && json?.data?.url) {
-      return json.data as MediaUploadResult;
+    if (res.ok && (json?.data?.url || json?.data?.publicUrl)) {
+      return {
+        ...json.data,
+        url: json.data.url || json.data.publicUrl,
+      } as MediaUploadResult;
     }
   } catch {
-    // Proceed to presigned URL or local object URL fallback
+    // Proceed to direct Cloudinary unsigned upload or presigned URL fallback
+  }
+
+  // 1b. If NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME & NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET are set in .env
+  if (ENV.CLOUDINARY_CLOUD_NAME && ENV.CLOUDINARY_UPLOAD_PRESET) {
+    try {
+      const cloudForm = new FormData();
+      cloudForm.append('file', file);
+      cloudForm.append('upload_preset', ENV.CLOUDINARY_UPLOAD_PRESET);
+      cloudForm.append('folder', `wavo/${folder}`);
+      const cloudRes = await fetch(
+        `https://api.cloudinary.com/v1_1/${ENV.CLOUDINARY_CLOUD_NAME}/image/upload`,
+        { method: 'POST', body: cloudForm }
+      );
+      const cloudJson = await cloudRes.json();
+      if (cloudRes.ok && cloudJson?.secure_url) {
+        return {
+          url: cloudJson.secure_url,
+          publicUrl: cloudJson.secure_url,
+          key: cloudJson.public_id,
+          publicId: cloudJson.public_id,
+          folder,
+          storageMode: 'cloudinary',
+          contentType: file.type || 'image/jpeg',
+          size: file.size,
+        };
+      }
+    } catch {
+      // Fallback to presigned URL
+    }
   }
 
   // 2. Fallback: Try Presigned URL flow if available
@@ -826,7 +860,7 @@ export async function uploadMediaFile(
       publicUrl: string;
       key: string;
       folder: string;
-      storageMode?: 's3' | 'local-fallback';
+      storageMode?: 'cloudinary' | 'local-fallback';
     }>('/media/presigned-url', {
       method: 'POST',
       headers: authHeaders,
@@ -850,7 +884,7 @@ export async function uploadMediaFile(
         url: presignRes.data.publicUrl,
         key: presignRes.data.key,
         folder: presignRes.data.folder || folder,
-        storageMode: presignRes.data.storageMode || 's3',
+        storageMode: presignRes.data.storageMode || 'cloudinary',
         contentType: file.type || 'image/jpeg',
         size: file.size,
       };

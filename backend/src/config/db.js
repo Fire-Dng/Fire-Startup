@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
 const env = require('./env');
 
-const LOCAL_FALLBACK_URI = 'mongodb://127.0.0.1:27017/dtu_upcycled_3d';
 let isConnected = false;
 
 const connectDB = async () => {
@@ -10,6 +9,7 @@ const connectDB = async () => {
   }
 
   mongoose.set('strictQuery', false);
+  const fallbackUri = env.LOCAL_FALLBACK_MONGODB_URI;
 
   try {
     const conn = await mongoose.connect(env.MONGODB_URI, {
@@ -20,12 +20,12 @@ const connectDB = async () => {
     return conn.connection;
   } catch (err) {
     console.warn(
-      `⚠️  [MongoDB] Primary connection failed (${err.message}). Attempting local MongoDB fallback (${LOCAL_FALLBACK_URI})...`
+      `⚠️  [MongoDB] Primary connection failed (${err.message}). Attempting local MongoDB fallback (${fallbackUri})...`
     );
 
-    if (env.MONGODB_URI !== LOCAL_FALLBACK_URI) {
+    if (env.MONGODB_URI !== fallbackUri && fallbackUri) {
       try {
-        const localConn = await mongoose.connect(LOCAL_FALLBACK_URI, {
+        const localConn = await mongoose.connect(fallbackUri, {
           serverSelectionTimeoutMS: 5000,
         });
         isConnected = true;
