@@ -9,6 +9,8 @@ const {
   deleteProduct,
 } = require('../controllers/product.controller');
 const { verifyToken, requireRole } = require('../middlewares/auth.middleware');
+const { validateBody } = require('../middlewares/validate.middleware');
+const { createProductSchema, updateProductSchema } = require('../validators/product.validator');
 
 const router = express.Router();
 
@@ -29,8 +31,22 @@ const optionalImageUpload = (req, res, next) => {
 
 router.get('/', getProducts);
 router.get('/:slug', getProductBySlugOrId);
-router.post('/', verifyToken, requireRole('admin'), optionalImageUpload, createProduct);
-router.put('/:id', verifyToken, requireRole('admin'), optionalImageUpload, updateProduct);
+router.post(
+  '/',
+  verifyToken,
+  requireRole('admin'),
+  optionalImageUpload,
+  validateBody(createProductSchema),
+  createProduct
+);
+router.put(
+  '/:id',
+  verifyToken,
+  requireRole('admin'),
+  optionalImageUpload,
+  validateBody(updateProductSchema),
+  updateProduct
+);
 router.delete('/:id', verifyToken, requireRole('admin'), deleteProduct);
 
 module.exports = router;

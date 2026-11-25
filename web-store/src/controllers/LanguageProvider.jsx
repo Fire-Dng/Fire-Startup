@@ -631,3 +631,13 @@ export function useLanguage() {
   if (!value) throw new Error('useLanguage phải được gọi trong LanguageProvider');
   return value;
 }
+
+export function getLocalizedProductField(product, field, language, t) {
+  if (!product) return '';
+  if (language === 'en') {
+    const enValue = product[field + 'En'];
+    if (enValue && String(enValue).trim()) return enValue;
+  }
+  const baseValue = product[field] || '';
+  return typeof t === 'function' ? t(baseValue) : baseValue;
+}

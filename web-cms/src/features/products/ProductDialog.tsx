@@ -17,12 +17,16 @@ import type { Product, ProductCategory } from '@/types';
 
 export interface ProductFormState {
   name: string;
+  nameEn: string;
   slug: string;
   category: ProductCategory;
   basePrice: number;
   craftFee: number;
   stock: number;
   shortDescription: string;
+  shortDescriptionEn: string;
+  description: string;
+  descriptionEn: string;
   imageUrl: string;
   meshPreset: string;
   glbUrl: string;
@@ -104,7 +108,7 @@ export function ProductDialog({
 
               <FormLayout direction="horizontal">
                 <TextInput
-                  label={isEn ? 'Product Name' : 'Tên sản phẩm'}
+                  label={isEn ? 'Product Name (VI)' : 'Tên sản phẩm (Tiếng Việt)'}
                   isRequired
                   value={form.name}
                   onChange={(val) => onChange({ ...form, name: val })}
@@ -113,14 +117,23 @@ export function ProductDialog({
                 />
 
                 <TextInput
-                  label="Slug URL"
+                  label={isEn ? 'Product Name (EN)' : 'Tên sản phẩm (Tiếng Anh)'}
                   isOptional
-                  value={form.slug}
-                  onChange={(val) => onChange({ ...form, slug: val })}
-                  placeholder="tui-xach-luoi-dai-duong-son-tra"
+                  value={form.nameEn}
+                  onChange={(val) => onChange({ ...form, nameEn: val })}
+                  placeholder="Son Tra Upcycled Ocean Net Tote"
                   width="100%"
                 />
               </FormLayout>
+
+              <TextInput
+                label="Slug URL"
+                isOptional
+                value={form.slug}
+                onChange={(val) => onChange({ ...form, slug: val })}
+                placeholder="tui-xach-luoi-dai-duong-son-tra"
+                width="100%"
+              />
 
               <FormLayout direction="horizontal">
                 <Selector
@@ -230,14 +243,45 @@ export function ProductDialog({
                 width="100%"
               />
 
-              <TextArea
-                label={isEn ? 'Short Description' : 'Mô tả ngắn sản phẩm'}
-                isOptional
-                value={form.shortDescription}
-                onChange={(val) => onChange({ ...form, shortDescription: val })}
-                rows={2}
-                width="100%"
-              />
+              <FormLayout direction="horizontal">
+                <TextArea
+                  label={isEn ? 'Short Description (VI)' : 'Mô tả ngắn (Tiếng Việt)'}
+                  isOptional
+                  value={form.shortDescription}
+                  onChange={(val) => onChange({ ...form, shortDescription: val })}
+                  rows={2}
+                  width="100%"
+                />
+
+                <TextArea
+                  label={isEn ? 'Short Description (EN)' : 'Mô tả ngắn (Tiếng Anh)'}
+                  isOptional
+                  value={form.shortDescriptionEn}
+                  onChange={(val) => onChange({ ...form, shortDescriptionEn: val })}
+                  rows={2}
+                  width="100%"
+                />
+              </FormLayout>
+
+              <FormLayout direction="horizontal">
+                <TextArea
+                  label={isEn ? 'Detailed Description (VI)' : 'Mô tả chi tiết (Tiếng Việt)'}
+                  isOptional
+                  value={form.description}
+                  onChange={(val) => onChange({ ...form, description: val })}
+                  rows={3}
+                  width="100%"
+                />
+
+                <TextArea
+                  label={isEn ? 'Detailed Description (EN)' : 'Mô tả chi tiết (Tiếng Anh)'}
+                  isOptional
+                  value={form.descriptionEn}
+                  onChange={(val) => onChange({ ...form, descriptionEn: val })}
+                  rows={3}
+                  width="100%"
+                />
+              </FormLayout>
 
               <Switch
                 label={

@@ -20,11 +20,14 @@ export interface ProductEcoImpact {
 export interface Product {
   _id: string;
   name: string;
+  nameEn?: string;
   slug: string;
   sku?: string;
   category: ProductCategory;
   shortDescription: string;
+  shortDescriptionEn?: string;
   description: string;
+  descriptionEn?: string;
   basePrice: number;
   craftFee: number;
   stock: number;
