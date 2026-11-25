@@ -1,45 +1,20 @@
-const CustomMaterial = require('../models/CustomMaterial');
-const AppError = require('../utils/AppError');
+const materialService = require('../services/material.service');
 const asyncHandler = require('../utils/asyncHandler');
 const { sendSuccess } = require('../utils/apiResponse');
-const { getMessage } = require('../i18n/messages');
+const { getMessage, resolveLang } = require('../i18n/messages');
 
 const getMaterials = asyncHandler(async (req, res) => {
-  const { materialType, includeInactive, search } = req.query;
-  const filter = {};
-
-  if (includeInactive !== 'true') {
-    filter.isActive = true;
-  }
-
-  if (materialType && materialType !== 'all') {
-    filter.materialType = String(materialType);
-  }
-
-  if (search && String(search).trim() !== '') {
-    const regex = new RegExp(String(search).trim(), 'i');
-    filter.$or = [{ name: regex }, { code: regex }, { description: regex }];
-  }
-
-  const materials = await CustomMaterial.find(filter).sort({ materialType: 1, unitPrice: 1 }).lean();
-
+  const materials = await materialService.listMaterials(req.query);
   return sendSuccess(res, {
     statusCode: 200,
     message: getMessage('GET_MATERIALS_SUCCESS', {}, req),
     data: materials,
-    meta: {
-      total: materials.length,
-    },
+    meta: { total: materials.length },
   });
 });
 
 const createMaterial = asyncHandler(async (req, res) => {
-  const payload = { ...req.body };
-  if (!payload.code && payload.name) {
-    payload.code = `MAT-${Date.now().toString().slice(-5)}`;
-  }
-
-  const material = await CustomMaterial.create(payload);
+  const material = await materialService.createMaterial(req.body);
   return sendSuccess(res, {
     statusCode: 201,
     message: getMessage('CREATE_MATERIAL_SUCCESS', {}, req),
@@ -48,16 +23,8 @@ const createMaterial = asyncHandler(async (req, res) => {
 });
 
 const updateMaterial = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const material = await CustomMaterial.findByIdAndUpdate(id, req.body, {
-    new: true,
-    runValidators: true,
-  }).lean();
-
-  if (!material) {
-    throw new AppError(getMessage('MATERIAL_NOT_FOUND', {}, req), 404, 'MATERIAL_NOT_FOUND');
-  }
-
+  const lang = resolveLang(req);
+  const material = await materialService.updateMaterial(req.params.id, req.body, lang);
   return sendSuccess(res, {
     statusCode: 200,
     message: getMessage('UPDATE_MATERIAL_SUCCESS', {}, req),
@@ -66,16 +33,12 @@ const updateMaterial = asyncHandler(async (req, res) => {
 });
 
 const deleteMaterial = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const material = await CustomMaterial.findByIdAndDelete(id).lean();
-  if (!material) {
-    throw new AppError(getMessage('MATERIAL_NOT_FOUND', {}, req), 404, 'MATERIAL_NOT_FOUND');
-  }
-
+  const lang = resolveLang(req);
+  const data = await materialService.deleteMaterial(req.params.id, lang);
   return sendSuccess(res, {
     statusCode: 200,
     message: getMessage('DELETE_MATERIAL_SUCCESS', {}, req),
-    data: { _id: id },
+    data,
   });
 });
 

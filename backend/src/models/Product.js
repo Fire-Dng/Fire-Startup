@@ -8,6 +8,11 @@ const productSchema = new mongoose.Schema(
       required: [true, 'Tên sản phẩm không được để trống'],
       trim: true,
     },
+    nameEn: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     slug: {
       type: String,
       required: [true, 'Slug sản phẩm không được để trống'],
@@ -30,7 +35,15 @@ const productSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    shortDescriptionEn: {
+      type: String,
+      default: '',
+    },
     description: {
+      type: String,
+      default: '',
+    },
+    descriptionEn: {
       type: String,
       default: '',
     },

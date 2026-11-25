@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useLandingData } from '../controllers/useSiteData.js';
 import { brandAssets } from '../data/brandAssets.js';
-import { useLanguage } from '../controllers/LanguageProvider.jsx';
+import { getLocalizedProductField, useLanguage } from '../controllers/LanguageProvider.jsx';
 
 const swatches = [
   ['#dcbb9b'],
@@ -14,7 +14,7 @@ const swatches = [
 
 export default function HomePage() {
   const homeRef = useRef(null);
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
   const { landing, products } = useLandingData();
   const hero = landing.hero || {};
   const fallbackTitle = hero.title === 'Biển đẹp tái sinh' ? 'BIỂN ĐẸP\nTÂM SÁNG' : hero.title;
@@ -93,11 +93,12 @@ export default function HomePage() {
         {realProducts.map((product, index) => {
           const demo = String(product._id || '').startsWith('demo-');
           const image = demo ? brandAssets.realProducts[index] : product.thumbnail || product.images?.[0] || brandAssets.realProducts[index];
+          const productName = getLocalizedProductField(product, 'name', language, t);
           const content = <>
             {index % 2 === 1 && <Swatches colors={swatches[index]} />}
-            {index % 2 === 1 && <p>{product.name}</p>}
-            <img src={image} alt={product.name} loading="lazy" />
-            {index % 2 === 0 && <p>{product.name}</p>}
+            {index % 2 === 1 && <p>{productName}</p>}
+            <img src={image} alt={productName} loading="lazy" />
+            {index % 2 === 0 && <p>{productName}</p>}
             {index % 2 === 0 && <Swatches colors={swatches[index]} />}
           </>;
           return <li className={'real' + (index % 2 ? ' real--dots-top' : '')} key={product._id || product.slug || index}>

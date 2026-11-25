@@ -56,7 +56,7 @@ export function createProductColumns({
               />
             </div>
             <VStack gap={0.5}>
-              <Text weight="semibold">{row.name}</Text>
+              <Text weight="semibold">{isEn ? row.nameEn || row.name : row.name}</Text>
               <Text type="supporting">
                 Mesh: {row.model3D?.meshPreset || 'tote_bag'} •{' '}
                 {row.ecoImpact?.netWeightGrams || 350}g lưới thu hồi

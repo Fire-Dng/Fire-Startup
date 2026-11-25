@@ -26,12 +26,16 @@ export function useProducts({ isEn, locale, t, notify }: UseProductsOptions) {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [prodForm, setProdForm] = useState<ProductFormState>({
     name: '',
+    nameEn: '',
     slug: '',
     category: 'bag',
     basePrice: 320000,
     craftFee: 30000,
     stock: 25,
     shortDescription: '',
+    shortDescriptionEn: '',
+    description: '',
+    descriptionEn: '',
     imageUrl: ASSETS.products.toteBagMain,
     meshPreset: 'tote_bag',
     glbUrl: '',
@@ -80,12 +84,16 @@ export function useProducts({ isEn, locale, t, notify }: UseProductsOptions) {
     setEditingProduct(null);
     setProdForm({
       name: '',
+      nameEn: '',
       slug: '',
       category: categories[0]?.slug || 'bag',
       basePrice: 320000,
       craftFee: 30000,
       stock: 25,
       shortDescription: '',
+      shortDescriptionEn: '',
+      description: '',
+      descriptionEn: '',
       imageUrl: ASSETS.products.toteBagMain,
       meshPreset: 'tote_bag',
       glbUrl: '',
@@ -100,12 +108,16 @@ export function useProducts({ isEn, locale, t, notify }: UseProductsOptions) {
     setEditingProduct(prod);
     setProdForm({
       name: prod.name,
+      nameEn: prod.nameEn || '',
       slug: prod.slug,
       category: prod.category,
       basePrice: prod.basePrice,
       craftFee: prod.craftFee,
       stock: prod.stock,
       shortDescription: prod.shortDescription,
+      shortDescriptionEn: prod.shortDescriptionEn || '',
+      description: prod.description || prod.shortDescription || '',
+      descriptionEn: prod.descriptionEn || prod.shortDescriptionEn || '',
       imageUrl:
         prod.image ||
         prod.imageUrl ||
@@ -134,6 +146,7 @@ export function useProducts({ isEn, locale, t, notify }: UseProductsOptions) {
 
     const payload: Partial<Product> = {
       name: prodForm.name,
+      nameEn: prodForm.nameEn.trim() || prodForm.name,
       slug:
         prodForm.slug ||
         prodForm.name
@@ -147,7 +160,9 @@ export function useProducts({ isEn, locale, t, notify }: UseProductsOptions) {
       craftFee: craftFeeValidation.value,
       stock: Number(prodForm.stock),
       shortDescription: prodForm.shortDescription,
-      description: prodForm.shortDescription,
+      shortDescriptionEn: prodForm.shortDescriptionEn,
+      description: prodForm.description || prodForm.shortDescription,
+      descriptionEn: prodForm.descriptionEn || prodForm.shortDescriptionEn,
       isCustomizable: prodForm.isCustomizable,
       isActive: true,
       image: resolvedImg,
