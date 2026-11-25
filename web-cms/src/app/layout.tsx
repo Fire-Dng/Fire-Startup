@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import { Be_Vietnam_Pro, Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
-import { CartProvider } from '@/context/CartContext';
 import { I18nProvider } from '@/i18n/I18nContext';
 
 const beVietnamPro = Be_Vietnam_Pro({
@@ -52,9 +51,7 @@ export default function CmsRootLayout({
       className={`${beVietnamPro.variable} ${plusJakarta.variable} ${jetbrainsMono.variable}`}
     >
       <body className="min-h-screen antialiased">
-        <I18nProvider>
-          <CartProvider>{children}</CartProvider>
-        </I18nProvider>
+        <I18nProvider>{children}</I18nProvider>
       </body>
     </html>
   );
