@@ -43,7 +43,10 @@ export function useProductListing(params) {
       let filtered = [...localProducts];
       if (params?.category && params.category !== 'all') filtered = filtered.filter((item) => item.category === params.category);
       if (params?.isCustomizable === 'true') filtered = filtered.filter((item) => item.isCustomizable);
-      if (params?.search) filtered = filtered.filter((item) => item.name.toLowerCase().includes(params.search.toLowerCase()));
+      if (params?.search) {
+        const q = params.search.toLowerCase();
+        filtered = filtered.filter((item) => item.name.toLowerCase().includes(q) || (item.nameEn || '').toLowerCase().includes(q));
+      }
       if (params?.sort === 'price_asc') filtered.sort((a, b) => a.basePrice - b.basePrice);
       if (params?.sort === 'price_desc') filtered.sort((a, b) => b.basePrice - a.basePrice);
       setProducts(filtered);

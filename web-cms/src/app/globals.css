@@ -105,3 +105,15 @@ nextjs-portal,
   background-color: var(--color-background-surface, rgba(120, 120, 128, 0.08));
   transform: translateX(3px);
 }
+
+/* CMS drawer menu (SideNav) custom background */
+.cms-sidenav-wrap > nav,
+.cms-sidenav-wrap > nav > * {
+  background-color: #e6f4ef;
+}
+[data-theme-mode="dark"] .cms-sidenav-wrap > nav,
+[data-theme-mode="dark"] .cms-sidenav-wrap > nav > *,
+.dark .cms-sidenav-wrap > nav,
+.dark .cms-sidenav-wrap > nav > * {
+  background-color: #12302b;
+}

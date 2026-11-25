@@ -5,13 +5,27 @@ const {
   updateMaterial,
   deleteMaterial,
 } = require('../controllers/material.controller');
-const { optionalAuth, verifyToken, requireRole } = require('../middlewares/auth.middleware');
+const { verifyToken, requireRole } = require('../middlewares/auth.middleware');
+const { validateBody } = require('../middlewares/validate.middleware');
+const { createMaterialSchema, updateMaterialSchema } = require('../validators/material.validator');
 
 const router = express.Router();
 
 router.get('/', getMaterials);
-router.post('/', verifyToken, requireRole('admin', 'staff'), createMaterial);
-router.put('/:id', verifyToken, requireRole('admin', 'staff'), updateMaterial);
+router.post(
+  '/',
+  verifyToken,
+  requireRole('admin', 'staff'),
+  validateBody(createMaterialSchema),
+  createMaterial
+);
+router.put(
+  '/:id',
+  verifyToken,
+  requireRole('admin', 'staff'),
+  validateBody(updateMaterialSchema),
+  updateMaterial
+);
 router.delete('/:id', verifyToken, requireRole('admin', 'staff'), deleteMaterial);
 
 module.exports = router;
